@@ -32,6 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -167,5 +168,33 @@ class CallbackHandlerTest {
         CallbackResult result = handler.handle(context(System.currentTimeMillis() / 1000));
         assertTrue(result.accepted());
         verify(paySuccessProducer, never()).send(any());
+    }
+
+    @Test
+    void should_not_publish_message_when_duplicate_callback_received() {
+        // Arrange
+        when(channelRouter.getChannel("MOCK")).thenReturn(paymentChannel);
+        when(paymentChannel.verifyCallback(any())).thenReturn(true);
+        when(snowflakeIdGenerator.nextId()).thenReturn(1L);
+        when(paymentService.getByPaymentNo("P1")).thenReturn(waitPayPayment());
+        when(paymentService.completePaySuccess(any(), any())).thenReturn(true);
+        when(paySuccessProducer.send(any(PaySuccessMessage.class))).thenReturn(true);
+        // 第一次落库成功；第二次相同 channelTransactionNo 触发 uk_callback_transaction 防重放
+        when(callbackLogMapper.insert(any(PaymentCallbackLog.class)))
+                .thenReturn(1)
+                .thenThrow(new DuplicateKeyException("dup"));
+        CallbackContext context = context(System.currentTimeMillis() / 1000);
+
+        // Act
+        CallbackResult first = handler.handle(context);
+        CallbackResult second = handler.handle(context);
+
+        // Assert
+        assertTrue(first.accepted());
+        assertTrue(second.accepted());
+        verify(callbackLogMapper, times(2)).insert(any(PaymentCallbackLog.class));
+        verify(paymentService, times(1)).getByPaymentNo("P1");
+        verify(paymentService, times(1)).completePaySuccess(any(), any());
+        verify(paySuccessProducer, times(1)).send(any(PaySuccessMessage.class));
     }
 }
