@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.util.HashSet;
 import java.util.Set;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -32,5 +33,30 @@ class ErrorCodeTest {
         assertTrue(ErrorCode.STOCK_EMPTY.getCode() >= 30000 && ErrorCode.STOCK_EMPTY.getCode() < 40000);
         assertTrue(ErrorCode.ORDER_NOT_FOUND.getCode() >= 40000 && ErrorCode.ORDER_NOT_FOUND.getCode() < 50000);
         assertTrue(ErrorCode.PAYMENT_NOT_FOUND.getCode() >= 50000 && ErrorCode.PAYMENT_NOT_FOUND.getCode() < 60000);
+    }
+
+    @Test
+    void should_keep_all_codes_in_frozen_segments_when_enumerated() {
+        // Arrange
+        long[] segments = new long[5];
+
+        // Act
+        for (ErrorCode errorCode : ErrorCode.values()) {
+            if (errorCode == ErrorCode.SUCCESS) {
+                continue;
+            }
+            int code = errorCode.getCode();
+            assertThat(code)
+                    .as("code out of frozen segment: %s=%d", errorCode.name(), code)
+                    .isBetween(10000, 59999);
+            segments[(code / 10000) - 1]++;
+        }
+
+        // Assert
+        for (int i = 0; i < segments.length; i++) {
+            assertThat(segments[i])
+                    .as("frozen segment %d has no error code", i + 1)
+                    .isPositive();
+        }
     }
 }

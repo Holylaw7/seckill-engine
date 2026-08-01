@@ -1,10 +1,14 @@
 package com.seckill.common.result;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.seckill.common.error.ErrorCode;
 import com.seckill.common.trace.TraceIdUtils;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -55,5 +59,27 @@ class ResultTest {
         } finally {
             TraceIdUtils.clear();
         }
+    }
+
+    @Test
+    void should_round_trip_nested_generic_result_when_using_type_reference() throws Exception {
+        // Arrange
+        PageResult<String> page = PageResult.of(List.of("a", "b"), 100L, 1, 10);
+        Result<PageResult<String>> result = Result.success(page);
+
+        // Act
+        String json = objectMapper.writeValueAsString(result);
+        Result<PageResult<String>> restored = objectMapper.readValue(
+                json, new TypeReference<Result<PageResult<String>>>() {
+                });
+
+        // Assert
+        assertThat(restored.getCode()).isZero();
+        assertThat(restored.getMessage()).isEqualTo("success");
+        assertThat(restored.getData()).isNotNull();
+        assertThat(restored.getData().getList()).containsExactly("a", "b");
+        assertThat(restored.getData().getTotal()).isEqualTo(100L);
+        assertThat(restored.getData().getPageNum()).isEqualTo(1);
+        assertThat(restored.getData().getPageSize()).isEqualTo(10);
     }
 }
