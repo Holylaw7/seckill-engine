@@ -142,6 +142,25 @@ class SeckillServiceImplTest {
         BusinessException e = assertThrows(BusinessException.class,
                 () -> seckillService.execute(10001L, "127.0.0.1", request()));
         assertEquals(30005, e.getErrorCode().getCode());
+        verify(mqProducer, never()).sendCreateOrder(any());
+        verify(snowflakeIdGenerator, never()).nextId();
+    }
+
+    @Test
+    void should_fail_fast_when_stock_not_ready() {
+        // Arrange
+        when(sessionCacheService.getSession(30001L)).thenReturn(readySession(-1000L, 60000L));
+        when(stockService.preDeduct(anyString(), anyString(), any(Integer.class), any(Long.class)))
+                .thenReturn(StockDeductResult.NOT_READY);
+
+        // Act
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> seckillService.execute(10001L, "127.0.0.1", request()));
+
+        // Assert
+        assertEquals(30003, e.getErrorCode().getCode());
+        verify(mqProducer, never()).sendCreateOrder(any());
+        verify(snowflakeIdGenerator, never()).nextId();
     }
 
     @Test
