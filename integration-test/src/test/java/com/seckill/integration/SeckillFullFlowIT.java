@@ -75,11 +75,12 @@ class SeckillFullFlowIT extends IntegrationTestBase {
 
     @AfterAll
     static void stopServices() {
-        List.of(PAYMENT, INVENTORY, ORDER, SECKILL, AUTH).forEach(service -> {
+        ServiceLauncher.RunningService[] services = {PAYMENT, INVENTORY, ORDER, SECKILL, AUTH};
+        for (ServiceLauncher.RunningService service : services) {
             if (service != null) {
                 service.stop();
             }
-        });
+        }
     }
 
     @BeforeEach
@@ -98,7 +99,20 @@ class SeckillFullFlowIT extends IntegrationTestBase {
                 "--spring.datasource.password=test",
                 "--spring.data.redis.host=" + REDIS.getHost(),
                 "--spring.data.redis.port=" + REDIS.getMappedPort(6379),
-                "--rocketmq.name-server=" + ROCKETMQ.getHost() + ":" + ROCKETMQ.getMappedPort(9876)));
+                "--rocketmq.name-server=" + ROCKETMQ.getHost() + ":" + ROCKETMQ.getMappedPort(9876),
+                // classpath 同名 application.yml 仅加载第一个（gateway），
+                // producer group 等专属配置统一命令行补齐
+                "--rocketmq.producer.group=integration-" + appName,
+                // integration-test classpath 携带 gateway 模块（WebFlux）；
+                // 各业务服务为 Servlet 应用，排除 Gateway 全套自动配置（端到端不经 gateway 转发）
+                "--spring.autoconfigure.exclude="
+                        + "org.springframework.cloud.gateway.config.GatewayAutoConfiguration,"
+                        + "org.springframework.cloud.gateway.config.GatewayClassPathWarningAutoConfiguration,"
+                        + "org.springframework.cloud.gateway.config.GatewayRedisAutoConfiguration,"
+                        + "org.springframework.cloud.gateway.config.GatewayMetricsAutoConfiguration,"
+                        + "org.springframework.cloud.gateway.config.GatewayLoadBalancerClientAutoConfiguration,"
+                        + "org.springframework.cloud.gateway.config.GatewayNoLoadBalancerClientAutoConfiguration,"
+                        + "org.springframework.cloud.gateway.config.HttpClientAutoConfiguration"));
         args.addAll(List.of(extra));
         return args;
     }
