@@ -2,11 +2,12 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 文档版本 | v1.0（评审稿） |
-| 状态 | 待评审 |
+| 文档版本 | v1.1（设计已评审 + 冻结补充） |
+| 状态 | 已评审，冻结补充已确认 |
 | 日期 | 2026-08-01 |
 | 关联基线 | 需求基线 v1.0 / 架构基线 v1.0 / 详细设计基线 v1.0（Redis/MQ/数据库/接口） |
 | 前置依赖 | seckill-common、gateway（限流/鉴权透传）、auth-service（内部风控接口） |
+| 变更记录 | v1.0 评审稿；v1.1 冻结补充：Lua 版本管理、messageId 全链路、秒杀结果状态机、flow TTL |
 
 ---
 
@@ -234,3 +235,40 @@ ARGV[1] = 回补数量
 2. Sentinel execute 限流基础值 5,000 QPS，压测后经 Nacos 校准；
 3. `seckill:flow:{orderId}` 发送幂等标记默认启用；
 4. 秒杀结果轮询间隔建议 500ms，由客户端控制。
+
+---
+
+## 附录 B：设计冻结补充（评审确认，v1.1）
+
+### B.1 Lua 脚本版本管理（冻结）
+
+- 脚本以资源文件存放：`src/main/resources/lua/seckill_deduct.lua`、`seckill_recover.lua`，文件头标注版本号（当前 v1.0）；
+- 加载方式：`ClassPathResource` + `DefaultRedisScript`，结果类型 `Long`，启动时加载并复用（Redis 侧按 SHA 缓存），**禁止运行时拼接脚本**；
+- 变更流程：脚本修改必须升级版本号并走设计评审；返回码语义（1 / -1 / -2 / -3 / -4）禁止破坏性修改，新增返回码必须同步文档与错误码映射。
+
+### B.2 MQ messageId 全链路冻结
+
+- `messageId` 由 seckill-service 生成（UUID 去横线，32 位），一经生成全链路不可改写；
+- 贯穿点：半事务消息体 `messageId` → 本地流水 `uk_message_id` → 消费幂等 `biz_id=messageId`（order-service）→ 确认回填按 messageId；
+- 禁止在 Producer / TransactionListener / Consumer 任意环节重生成或改写；审计与排查以 messageId 为聚合键。
+
+### B.3 秒杀结果状态机（冻结）
+
+```text
+NONE → DEDUCTED → SUCCESS / FAILED
+```
+
+| 状态 | 判定 | 说明 |
+| --- | --- | --- |
+| `NONE` | 无购买标记且无预扣流水 | 未参与或预扣未发生 |
+| `DEDUCTED` | Lua 预扣成功，流水 deduct_status=DEDUCTED | 订单异步处理中（客户端轮询） |
+| `SUCCESS` | 流水 deduct_status=CONFIRMED（订单已创建） | 终态 |
+| `FAILED` | 流水 deduct_status=RECOVERED（已回补） | 终态（回滚/补偿后） |
+
+规则：状态只进不退；重复查询幂等；`result` 接口返回 `NONE / DEDUCTED / SUCCESS / FAILED`。
+
+### B.4 seckill:flow TTL 冻结
+
+- `seckill:flow:{orderId}` TTL = **24 小时（86400 秒）**，配置项 `seckill.core.flow-key-ttl-seconds`；
+- 用途：预扣成功发送幂等标记，防止同一 orderId 重复发送 `CREATE_ORDER`；
+- TTL 与场次无关，固定 24h；变更须评审。
