@@ -2,11 +2,12 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 文档版本 | v1.0（评审稿） |
-| 状态 | 待评审 |
+| 文档版本 | v1.1（设计已评审 + 冻结补充） |
+| 状态 | 已评审，冻结补充已确认 |
 | 日期 | 2026-08-01 |
 | 关联基线 | 架构基线 v1.0（12.2 Risk 设计）、详细设计基线 v1.0（数据库/接口/错误码）、Phase 4 开发规范 |
 | 前置依赖 | seckill-common（已评审通过）、gateway（已评审通过，JWT 解析入口） |
+| 变更记录 | v1.0 评审稿；v1.1 冻结补充：JWT Payload、密钥管理、Session 字段、登录失败策略、管理接口安全 |
 
 ---
 
@@ -195,3 +196,54 @@ RiskService 以接口暴露，实现类可整体迁移至独立 `risk-service`�
 3. 账号禁用复用 20002 覆盖文案，不新增错误码；
 4. 设备指纹仅预留字段与记录能力，采集实现 Phase 6 评估；
 5. JWT 密钥开发环境默认值仅本地使用，生产 Nacos 下发。
+
+---
+
+## 附录 B：设计冻结补充（评审确认，v1.1）
+
+### B.1 JWT Payload 字段冻结
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `sub` | String | 用户 ID |
+| `username` | String | 登录名 |
+| `iat` | Long | 签发时间（秒） |
+| `exp` | Long | 过期时间（秒） |
+| `jti` | String | Token 唯一 ID（UUID），用于未来 Token 撤销与审计 |
+| `roles` | String | 角色（逗号分隔，如 `USER` / `USER,ADMIN`） |
+
+`jti` 仅用于审计与预留撤销，基础版不维护撤销列表（会话删除为准）。
+
+### B.2 JWT 密钥管理冻结
+
+- 开发环境：`application.yml` 配置 `seckill.auth.jwt.secret`（仅本地默认值）；
+- 测试/生产：Nacos 配置中心下发（key 结构不变），**禁止代码硬编码 secret**；
+- gateway 与 auth-service 使用同一 secret（生产同源下发）。
+
+### B.3 Session 字段冻结
+
+`auth:session:{userId}` Hash 字段：
+
+| 字段 | 说明 |
+| --- | --- |
+| `userId` | 用户 ID |
+| `username` | 登录名 |
+| `tokenVersion` | Token 版本（初始 1，用于未来版本化失效） |
+| `loginTime` | 登录时间（毫秒） |
+| `lastActiveTime` | 最后活跃时间（毫秒） |
+| `device` | 设备指纹（预留） |
+
+TTL 与 access token 一致（2h）。
+
+### B.4 登录失败策略冻结
+
+- 连续失败计数：`risk:login:fail:{userId}`（用户不存在时以 username 作为标识），窗口 10 分钟；
+- 失败 ≥ 5 次：触发验证码（`CAPTCHA_REQUIRED` 20004）；
+- 失败 ≥ 10 次：临时冻结（`RISK_REJECTED` 20003，提示“账号已临时冻结”）；
+- 登录成功：清除失败计数。
+
+### B.5 管理接口安全冻结
+
+- 拉黑、解封、黑名单查询（`/api/v1/auth/admin/**`）必须 **JWT 有效 + roles 含 ADMIN** 双重校验；
+- 实现：auth-service 内 `AdminAuthInterceptor`（拦截器）二次解析 Authorization 头校验角色，不依赖网关改造；
+- roles 来源：`user.roles` 列（默认 `USER`，逗号分隔），`user` 表 DDL 同步新增该列。
