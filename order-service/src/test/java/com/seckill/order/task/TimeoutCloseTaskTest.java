@@ -56,4 +56,22 @@ class TimeoutCloseTaskTest {
         task.closeExpiredOrders();
         verify(orderService, never()).publishCancelNotify(any());
     }
+
+    @Test
+    void should_close_order_once_when_task_runs_multiple_times() {
+        // Arrange
+        SeckillOrder order = new SeckillOrder();
+        order.setId(1L);
+        // 第一次扫描命中 WAIT_PAY 过期订单；第二次扫描不再返回（已 TIMEOUT，不在查询范围）
+        when(orderService.findExpiredWaitPay(200)).thenReturn(List.of(order), List.of());
+        when(orderService.closeOrder(order)).thenReturn(true);
+
+        // Act
+        task.closeExpiredOrders();
+        task.closeExpiredOrders();
+
+        // Assert
+        verify(orderService, times(1)).closeOrder(any());
+        verify(orderService, times(1)).publishCancelNotify(any());
+    }
 }
