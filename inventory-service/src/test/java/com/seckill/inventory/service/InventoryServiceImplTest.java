@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.seckill.common.error.ErrorCode;
 import com.seckill.common.exception.BusinessException;
+import com.seckill.inventory.constant.InventoryConstants;
 import com.seckill.inventory.dto.CreateOrderMessage;
 import com.seckill.inventory.entity.Inventory;
 import com.seckill.inventory.entity.StockFlow;
@@ -93,6 +94,9 @@ class InventoryServiceImplTest {
         BusinessException e = assertThrows(BusinessException.class,
                 () -> newService().confirmDeduct(message()));
         assertEquals(ErrorCode.INVENTORY_ERROR, e.getErrorCode());
+        verify(inventoryMapper, never()).update(isNull(), any());
+        verify(stockFlowService, never()).createFlow(anyString(), anyString(), anyString(), anyLong(),
+                any(Integer.class), any(Integer.class), any(Integer.class), any(), anyString());
     }
 
     @Test
@@ -105,6 +109,23 @@ class InventoryServiceImplTest {
 
         assertTrue(newService().confirmDeduct(message()));
         verify(inventoryMapper, times(2)).selectOne(any());
+    }
+
+    @Test
+    void should_fail_when_cas_conflict_exceeds_retry_limit() {
+        // Arrange
+        when(inventoryMapper.selectOne(any())).thenReturn(inventory(10, 0, 5));
+        when(inventoryMapper.update(isNull(), any())).thenReturn(0, 0, 0);
+
+        // Act
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> newService().confirmDeduct(message()));
+
+        // Assert
+        assertEquals(ErrorCode.INVENTORY_ERROR, e.getErrorCode());
+        verify(inventoryMapper, times(InventoryConstants.CAS_MAX_RETRY)).selectOne(any());
+        verify(stockFlowService, never()).createFlow(anyString(), anyString(), anyString(), anyLong(),
+                any(Integer.class), any(Integer.class), any(Integer.class), any(), anyString());
     }
 
     @Test
@@ -146,6 +167,26 @@ class InventoryServiceImplTest {
         BusinessException e = assertThrows(BusinessException.class,
                 () -> newService().recoverStock("SO123", 20001L, 1, "CANCEL"));
         assertEquals(ErrorCode.INVENTORY_ERROR, e.getErrorCode());
+    }
+
+    @Test
+    void should_succeed_when_recover_cas_succeeds_after_retry() {
+        // Arrange
+        when(inventoryMapper.selectOne(any())).thenReturn(inventory(5, 3, 2));
+        when(inventoryMapper.update(isNull(), any())).thenReturn(0, 1);
+        when(stockFlowService.createFlow(anyString(), anyString(), anyString(), anyLong(),
+                any(Integer.class), any(Integer.class), any(Integer.class), any(), anyString()))
+                .thenReturn("SF10");
+
+        // Act
+        String flowNo = newService().recoverStock("SO123", 20001L, 1, "CANCEL");
+
+        // Assert
+        assertEquals("SF10", flowNo);
+        verify(inventoryMapper, times(2)).selectOne(any());
+        verify(stockFlowService).createFlow(
+                eq("RECOVER"), eq("CANCEL"), eq("SO123"), eq(20001L),
+                eq(1), eq(5), eq(6), eq(null), eq("STOCK_RECOVER"));
     }
 
     @Test
