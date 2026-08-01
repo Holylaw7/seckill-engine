@@ -9,6 +9,10 @@ import org.testcontainers.utility.DockerImageName;
 
 import java.time.Duration;
 
+import com.github.dockerjava.api.model.ExposedPort;
+import com.github.dockerjava.api.model.PortBinding;
+import com.github.dockerjava.api.model.Ports;
+
 /**
  * 集成测试公共基类（Phase 5.1 冻结）：
  * <ul>
@@ -34,11 +38,20 @@ public abstract class AbstractIntegrationTest {
             .waitingFor(Wait.forListeningPort())
             .withStartupTimeout(Duration.ofSeconds(180));
 
+    /**
+     * RocketMQ 单容器（namesrv + broker）：
+     * 固定映射 19876/20911（避开本机开发容器占用的 9876/10911），
+     * broker 通告 host.docker.internal:20911，保证宿主机 producer 可直连。
+     */
     protected static final GenericContainer<?> ROCKETMQ = new GenericContainer<>(
             DockerImageName.parse("apache/rocketmq:5.1.4"))
-            .withExposedPorts(9876, 10911)
+            .withExposedPorts(9876, 20911)
+            .withCreateContainerCmdModifier(cmd -> cmd.getHostConfig().withPortBindings(
+                    new PortBinding(Ports.Binding.bindPort(19876), new ExposedPort(9876)),
+                    new PortBinding(Ports.Binding.bindPort(20911), new ExposedPort(20911))))
             .withCommand("sh", "-c",
-                    "sh mqnamesrv & sleep 10; sh mqbroker -n 127.0.0.1:9876 & tail -f /dev/null")
+                    "printf 'brokerIP1=host.docker.internal\\nlistenPort=20911\\nautoCreateTopicEnable=true\\n' > /tmp/broker.conf; "
+                            + "sh mqnamesrv & sleep 10; sh mqbroker -n 127.0.0.1:9876 -c /tmp/broker.conf & tail -f /dev/null")
             .waitingFor(Wait.forListeningPort())
             .withStartupTimeout(Duration.ofSeconds(300));
 
