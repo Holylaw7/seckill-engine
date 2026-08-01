@@ -2,11 +2,12 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 文档版本 | v1.0（评审稿） |
-| 状态 | 待评审 |
+| 文档版本 | v1.1（设计已评审 + 冻结补充） |
+| 状态 | 已评审，冻结补充已确认 |
 | 日期 | 2026-08-01 |
 | 关联基线 | 需求基线 v1.0 / 架构基线 v1.0（3.1、7、11.4）/ 详细设计基线 v1.0（数据库/MQ/Redis） |
 | 前置依赖 | seckill-common、seckill-service（预扣与流水）、order-service（状态事件，后续阶段） |
+| 变更记录 | v1.0 评审稿；v1.1 冻结补充：回补接口契约、消费组、库存状态机、对账边界、Redis 恢复失败策略 |
 
 ---
 
@@ -207,3 +208,44 @@ INIT（total=T, available=T, locked=0）
 2. Redis 回补经 seckill-service 内部接口（附录 A 变更申请），确认批准；
 3. 支付最终确认（locked→sold，CONFIRM 变更类型）在 payment/order 阶段接入，本阶段预留；
 4. 对账任务周期默认 5 分钟，修复审批人默认运营管理员。
+
+---
+
+## 附录 C：设计冻结补充（评审确认，v1.1）
+
+### C.1 Redis 恢复内部接口契约（冻结）
+
+| 项 | 内容 |
+| --- | --- |
+| 接口 | `POST /api/v1/seckill/internal/stocks/recover` |
+| 请求字段 | `requestId`（String）、`skuId`（Long）、`sessionId`（Long）、`recoverCount`（Integer） |
+| 约束 | **`requestId` 必须等于 `stock_flow.flow_no`**；重复调用按 requestId 幂等返回 |
+| 响应 | `Result<Void>`（code=0 成功） |
+
+### C.2 CREATE_ORDER 消费组冻结
+
+- inventory-service 消费组：**`inventory-consumer`**；
+- order-service 独立消费组：`order-consumer`（后续阶段实现）；
+- 同一 `CREATE_ORDER` 消息由两个消费组并行消费、各自幂等，禁止共用消费组。
+
+### C.3 inventory 状态机冻结
+
+| 状态 | 语义 | 转换 |
+| --- | --- | --- |
+| `AVAILABLE` | 可售库存（available_stock） | 初始化/回补后 |
+| `LOCKED` | 已确认扣减、待支付（locked_stock） | DEDUCT（available-1, locked+1） |
+| `CONFIRMED` | 支付最终确认（预留） | CONFIRM（locked-1，payment/order 阶段） |
+| `RECOVERED` | 回补释放 | RECOVER（locked-1, available+1） |
+
+状态以 `inventory` 列值表达，由 `stock_flow.change_type` 驱动转换。
+
+### C.4 对账边界
+
+- inventory-service 只负责**库存事实核对**（本库 `inventory` 与 `stock_flow` 一致性、与 Redis 热点库存差异）；
+- **订单/支付对账由 order-service / payment-service 及全局对账负责**，本服务不越界。
+
+### C.5 Redis 恢复失败策略
+
+- 顺序铁律：**MySQL 事实成功优先，Redis 热点后补**；
+- Redis 恢复失败（接口异常/超时）：**不阻塞 ACK**，进入**告警 + repair 流程**（对账以 MySQL 为准，经 seckill-service 接口校准 Redis）；
+- 禁止因 Redis 失败回滚 MySQL 事实。
