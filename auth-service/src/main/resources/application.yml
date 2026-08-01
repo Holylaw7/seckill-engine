@@ -1,0 +1,32 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: auth-service
+  datasource:
+    url: jdbc:mysql://localhost:3306/seckill_auth?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: auth_rw
+    password: change-me
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+seckill:
+  auth:
+    worker-id: 1
+    jwt:
+      # 仅开发环境默认值；测试/生产由 Nacos 配置中心下发，禁止代码硬编码
+      secret: seckill-engine-dev-secret-change-me
+      expire-minutes: 120
