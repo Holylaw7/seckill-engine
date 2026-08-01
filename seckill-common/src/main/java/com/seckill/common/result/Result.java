@@ -3,6 +3,7 @@ package com.seckill.common.result;
 import com.seckill.common.error.ErrorCode;
 import com.seckill.common.trace.TraceIdUtils;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.io.Serializable;
 
@@ -12,6 +13,7 @@ import java.io.Serializable;
  * <p>Controller 禁止自行组装返回对象，统一使用 {@link #success()} / {@link #error(ErrorCode)}。</p>
  */
 @Data
+@NoArgsConstructor
 public class Result<T> implements Serializable {
 
     private static final long serialVersionUID = 1L;

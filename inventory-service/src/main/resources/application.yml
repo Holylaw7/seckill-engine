@@ -1,0 +1,33 @@
+server:
+  port: 8085
+
+spring:
+  application:
+    name: inventory-service
+  datasource:
+    url: jdbc:mysql://localhost:3306/seckill_inventory?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: inventory_rw
+    password: change-me
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+rocketmq:
+  name-server: localhost:9876
+  producer:
+    group: inventory-producer
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+seckill:
+  inventory:
+    worker-id: 3
+    recover:
+      # seckill-service 内部回补接口（契约冻结：requestId=stock_flow.flow_no，幂等）
+      base-url: http://localhost:8082
+      path: /api/v1/seckill/internal/stocks/recover
