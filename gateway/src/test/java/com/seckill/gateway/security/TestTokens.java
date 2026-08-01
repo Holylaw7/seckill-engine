@@ -16,9 +16,13 @@ public final class TestTokens {
     }
 
     public static String create(String userId, long expEpochSeconds, String secret) throws Exception {
+        return createWithPayload(
+                "{\"sub\":\"" + userId + "\",\"exp\":" + expEpochSeconds + "}", secret);
+    }
+
+    public static String createWithPayload(String payloadJson, String secret) throws Exception {
         String header = ENCODER.encodeToString("{\"alg\":\"HS256\",\"typ\":\"JWT\"}".getBytes(StandardCharsets.UTF_8));
-        String payload = ENCODER.encodeToString(
-                ("{\"sub\":\"" + userId + "\",\"exp\":" + expEpochSeconds + "}").getBytes(StandardCharsets.UTF_8));
+        String payload = ENCODER.encodeToString(payloadJson.getBytes(StandardCharsets.UTF_8));
         String signingInput = header + "." + payload;
         Mac mac = Mac.getInstance(JwtTokenParser.ALGORITHM);
         mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), JwtTokenParser.ALGORITHM));

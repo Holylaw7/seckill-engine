@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -44,5 +45,48 @@ class JwtTokenParserTest {
     void shouldRejectWrongSecret() throws Exception {
         long exp = (System.currentTimeMillis() / 1000) + 3600;
         assertTrue(JwtTokenParser.parse(TestTokens.create("10001", exp, "other-secret"), SECRET).isEmpty());
+    }
+
+    @Test
+    void should_reject_when_sub_missing() throws Exception {
+        // Arrange
+        long exp = (System.currentTimeMillis() / 1000) + 3600;
+        String token = TestTokens.createWithPayload(
+                "{\"exp\":" + exp + ",\"roles\":[\"USER\"]}", SECRET);
+
+        // Act
+        Optional<JwtTokenParser.Claims> claims = JwtTokenParser.parse(token, SECRET);
+
+        // Assert
+        assertThat(claims).isEmpty();
+    }
+
+    @Test
+    void should_reject_when_exp_missing() throws Exception {
+        // Arrange
+        String token = TestTokens.createWithPayload(
+                "{\"sub\":\"10001\",\"roles\":[\"USER\"]}", SECRET);
+
+        // Act
+        Optional<JwtTokenParser.Claims> claims = JwtTokenParser.parse(token, SECRET);
+
+        // Assert
+        assertThat(claims).isEmpty();
+    }
+
+    @Test
+    void should_authenticate_when_roles_missing() throws Exception {
+        // Arrange
+        long exp = (System.currentTimeMillis() / 1000) + 3600;
+        // 冻结契约：roles 非网关认证必需字段，管理接口权限由 auth-service 校验
+        String token = TestTokens.createWithPayload(
+                "{\"sub\":\"10001\",\"exp\":" + exp + "}", SECRET);
+
+        // Act
+        Optional<JwtTokenParser.Claims> claims = JwtTokenParser.parse(token, SECRET);
+
+        // Assert
+        assertThat(claims).isPresent();
+        assertThat(claims.get().userId()).isEqualTo("10001");
     }
 }

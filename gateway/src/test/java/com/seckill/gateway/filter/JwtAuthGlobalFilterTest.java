@@ -12,6 +12,7 @@ import reactor.core.publisher.Mono;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -70,6 +71,42 @@ class JwtAuthGlobalFilterTest {
                         .header("Authorization", "Bearer invalid"));
         filter.filter(exchange, e -> Mono.empty()).block();
         assertEquals(HttpStatus.UNAUTHORIZED, exchange.getResponse().getStatusCode());
+        assertNull(exchange.getAttribute(GatewayConstants.GATEWAY_USER_ID));
+    }
+
+    @Test
+    void should_reject_and_not_propagate_user_when_sub_missing() throws Exception {
+        // Arrange
+        long exp = (System.currentTimeMillis() / 1000) + 3600;
+        String token = TestTokens.createWithPayload(
+                "{\"exp\":" + exp + ",\"roles\":[\"USER\"]}", SECRET);
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/api/v1/seckill/session/1")
+                        .header("Authorization", "Bearer " + token));
+
+        // Act
+        filter.filter(exchange, e -> Mono.empty()).block();
+
+        // Assert
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertNull(exchange.getAttribute(GatewayConstants.GATEWAY_USER_ID));
+        assertThat(exchange.getRequest().getHeaders().getFirst(GatewayConstants.USER_ID_HEADER)).isNull();
+    }
+
+    @Test
+    void should_reject_when_exp_missing() throws Exception {
+        // Arrange
+        String token = TestTokens.createWithPayload(
+                "{\"sub\":\"10001\",\"roles\":[\"USER\"]}", SECRET);
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/api/v1/seckill/session/1")
+                        .header("Authorization", "Bearer " + token));
+
+        // Act
+        filter.filter(exchange, e -> Mono.empty()).block();
+
+        // Assert
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertNull(exchange.getAttribute(GatewayConstants.GATEWAY_USER_ID));
     }
 }
