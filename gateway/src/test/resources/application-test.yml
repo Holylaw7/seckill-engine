@@ -1,0 +1,13 @@
+# Phase 5 测试配置隔离（容器动态覆盖 redis 地址）
+server:
+  port: 0
+spring:
+  data:
+    redis:
+      host: localhost
+      port: 6379
+seckill:
+  gateway:
+    jwt:
+      secret: test-secret
+      enabled: true

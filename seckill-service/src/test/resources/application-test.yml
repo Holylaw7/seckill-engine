@@ -1,0 +1,19 @@
+server:
+  port: 0
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/seckill_seckill_test
+    username: test
+    password: test
+  data:
+    redis:
+      host: localhost
+      port: 6379
+rocketmq:
+  name-server: localhost:9876
+seckill:
+  core:
+    worker-id: 22
+    flow-key-ttl-seconds: 86400
+    risk-check:
+      enabled: false

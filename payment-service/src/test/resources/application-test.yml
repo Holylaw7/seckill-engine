@@ -1,0 +1,14 @@
+server:
+  port: 0
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/seckill_payment_test
+    username: test
+    password: test
+rocketmq:
+  name-server: localhost:9876
+seckill:
+  payment:
+    worker-id: 25
+    callback:
+      window-seconds: 300

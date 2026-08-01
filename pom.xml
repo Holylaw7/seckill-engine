@@ -14,6 +14,7 @@
 
     <modules>
         <module>seckill-common</module>
+        <module>test-support</module>
         <module>seckill-api</module>
         <module>gateway</module>
         <module>auth-service</module>
@@ -42,6 +43,9 @@
         <rocketmq.version>5.2.0</rocketmq.version>
         <rocketmq-spring-boot.version>2.3.1</rocketmq-spring-boot.version>
         <nacos-client.version>2.3.2</nacos-client.version>
+        <!-- 测试基础设施 -->
+        <!-- 1.21.4+ 修复新版 Docker Desktop 命名管道 400 兼容问题（docker-java transport） -->
+        <testcontainers.version>1.21.4</testcontainers.version>
 
         <!-- 构建插件版本 -->
         <maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
@@ -71,6 +75,14 @@
                 <groupId>com.alibaba.cloud</groupId>
                 <artifactId>spring-cloud-alibaba-dependencies</artifactId>
                 <version>${spring-cloud-alibaba.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <!-- Testcontainers BOM（MySQL/Redis/RocketMQ 模块） -->
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>testcontainers-bom</artifactId>
+                <version>${testcontainers.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
