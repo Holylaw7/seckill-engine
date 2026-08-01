@@ -2,11 +2,12 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 文档版本 | v1.0（评审稿） |
-| 状态 | 待评审 |
+| 文档版本 | v1.1（设计已评审 + 冻结补充） |
+| 状态 | 已评审，冻结补充已确认 |
 | 日期 | 2026-08-01 |
 | 关联基线 | 需求基线 v1.0（订单状态机、BR-04）/ 架构基线 v1.0 / 详细设计基线 v1.0（数据库/MQ/接口/事务边界） |
 | 前置依赖 | seckill-common、seckill-service（`/internal/pre-deducts/confirm` 已实现） |
+| 变更记录 | v1.0 评审稿；v1.1 冻结补充：金额快照、状态机唯一入口、取消约束、超时关闭参数、CANCEL_ORDER 补偿 |
 
 ---
 
@@ -180,3 +181,36 @@ CREATE → WAIT_PAY → PAY_SUCCESS → REFUND（payment 阶段接入）
 2. 超时关单扫描周期 30s，批量大小 200；
 3. 用户取消接口本阶段实现（WAIT_PAY→CANCEL）；
 4. 关单消息发布失败由补偿任务补发（周期 1 分钟）。
+
+---
+
+## 附录 C：设计冻结补充（评审确认，v1.1）
+
+### C.1 金额快照（冻结）
+
+- `CREATE_ORDER` 消息携带 `amount` 字段，单位：**分**（Long）；
+- order-service 建单时转换为 `DECIMAL(18,2)` 金额快照写入订单与明细；
+- 消息缺少 `amount` 视为数据异常：告警、不建单（依赖附录 A 方案 A 的 seckill-service 独立变更）。
+
+### C.2 状态机唯一入口（冻结）
+
+- **所有状态变更必须经过 `OrderStateMachine`**（`canTransition` 校验 + `version` CAS 更新）；
+- Controller 禁止直接修改 `order_status` / `active_key`；
+- 非法流转抛出 `ORDER_STATUS_INVALID`（40002）。
+
+### C.3 用户取消约束（冻结）
+
+- 仅 `WAIT_PAY` 状态允许用户取消（否则 40002）；
+- 取消成功释放 `active_key` 并发布 `CANCEL_ORDER(reason=CANCEL)`。
+
+### C.4 超时关闭（冻结）
+
+- 扫描周期 **30 秒**，单批 **batch=200**，条件 `WAIT_PAY AND pay_deadline < now`；
+- 状态更新一律 `version` CAS；关单释放 `active_key`；
+- DDL 变更：`seckill_order` 新增 `cancel_notify_status VARCHAR(20) DEFAULT 'PENDING'`（PENDING/SENT），用于补偿任务判断 CANCEL_ORDER 是否已发送。
+
+### C.5 CANCEL_ORDER 失败补偿（冻结）
+
+- 发布成功置 `SENT`；发布失败保持 `PENDING`；
+- **补偿任务每 1 分钟**扫描 `CANCEL/TIMEOUT AND cancel_notify_status=PENDING` 补发；
+- 重复发布由下游（inventory uk_biz）幂等兜底。
