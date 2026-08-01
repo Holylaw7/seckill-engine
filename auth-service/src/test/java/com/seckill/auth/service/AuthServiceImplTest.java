@@ -22,6 +22,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -173,5 +174,30 @@ class AuthServiceImplTest {
         when(sessionService.getSession("10001")).thenReturn(Map.of());
         BusinessException e = assertThrows(BusinessException.class, () -> authService.getSession("10001"));
         assertEquals(20001, e.getErrorCode().getCode());
+    }
+
+    @Test
+    void should_pass_through_frozen_session_fields_when_session_exists() {
+        // Arrange
+        Map<Object, Object> session = new HashMap<>();
+        session.put("userId", "10001");
+        session.put("username", "alice");
+        session.put("tokenVersion", "2");
+        session.put("loginTime", "1111");
+        session.put("lastActiveTime", "2222");
+        session.put("device", "device-x");
+        when(sessionService.getSession("10001")).thenReturn(session);
+
+        // Act
+        SessionResponse response = authService.getSession("10001");
+
+        // Assert
+        assertThat(response.getUserId()).isEqualTo("10001");
+        assertThat(response.getUsername()).isEqualTo("alice");
+        assertThat(response.getTokenVersion()).isEqualTo("2");
+        assertThat(response.getLoginTime()).isEqualTo(1111L);
+        assertThat(response.getLastActiveTime()).isEqualTo(2222L);
+        assertThat(response.getDevice()).isEqualTo("device-x");
+        verify(sessionService).touch("10001");
     }
 }
