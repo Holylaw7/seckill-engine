@@ -1,0 +1,40 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: seckill-service
+  datasource:
+    url: jdbc:mysql://localhost:3306/seckill_seckill?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: seckill_rw
+    password: change-me
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+rocketmq:
+  name-server: localhost:9876
+  producer:
+    group: seckill-producer
+    send-message-timeout: 3000
+    retry-times-when-send-failed: 2
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+seckill:
+  core:
+    worker-id: 2
+    flow-key-ttl-seconds: 86400
+    risk-check:
+      enabled: true
+      base-url: http://localhost:8081
+      fail-open: true
