@@ -83,7 +83,7 @@
    UNKNOWN/不存在 → 返回 UNKNOWN，Broker 继续回查（上限后告警人工）
 ```
 
-状态机：`UNKNOWN → COMMITTED / ROLLBACK`
+状态机：`UNKNOWN → COMMITTED / ROLLBACK`（Broker 侧）；数据库侧 `seckill_pre_deduct.tx_status` 冻结为 `INIT/SUCCESS/FAIL`，映射：INIT→UNKNOWN、SUCCESS→COMMITTED、FAIL→ROLLBACK（详见《事务边界说明》）
 
 关键参数：`sendMsgTimeout=3000ms`；回查逻辑以数据库为准，**不依赖内存状态**。
 
@@ -92,10 +92,10 @@
 ### 5.1 executeLocalTransaction（半消息发送后执行）
 
 ```text
-1 幂等插入 seckill_pre_deduct（uk_message_id）
-2 插入成功 → 返回 COMMITTED
+1 插入 seckill_pre_deduct（uk_message_id，状态 INIT）
+2 事务提交成功 → 状态更新为 SUCCESS → 返回 COMMITTED
 3 唯一索引冲突 → 已提交过 → 返回 COMMITTED
-4 任何异常 → 返回 ROLLBACK，并补偿回补 Redis 库存（INCRBY + 回补流水）
+4 任何异常 → 状态 FAIL → 返回 ROLLBACK，并补偿回补 Redis 库存（INCRBY + 回补流水）
 ```
 
 关键点：Redis 扣减先于本地事务发生；本地事务失败时**必须补偿回补**，否则出现“扣了库存没有流水”的悬挂。
@@ -104,9 +104,9 @@
 
 ```text
 按 messageId 查询 seckill_pre_deduct.tx_status：
-  COMMITTED  → 返回 COMMITTED
-  ROLLBACK   → 返回 ROLLBACK
-  不存在/UNKNOWN → 返回 UNKNOWN（继续回查，最多 15 次，之后告警人工介入）
+  SUCCESS → 返回 COMMITTED
+  FAIL    → 返回 ROLLBACK
+  INIT / 不存在 → 返回 UNKNOWN（继续回查，最多 15 次，之后告警人工介入）
 ```
 
 ### 5.3 发送失败处理
@@ -124,8 +124,8 @@
 ```text
 1 幂等表插入（biz_type=ORDER_CREATE, biz_id=messageId, user_id）
 2 唯一索引冲突 → 已处理过 → 返回 CONSUME_SUCCESS（重复消息直接成功）
-3 同事务创建订单（CREATE → WAIT_PAY），订单唯一约束兜底
-4 回填 seckill_pre_deduct：order_id、deduct_status=CONFIRMED
+3 同事务创建订单并置为 WAIT_PAY（创建订单 + 更新消费状态），订单唯一约束兜底
+4 数据库事务提交后，经内部接口通知 seckill-service 回填 pre_deduct（order_id、deduct_status=CONFIRMED）；失败由对账任务兜底（order-service 禁止直连 seckill 库）
 5 返回 CONSUME_SUCCESS
 ```
 
