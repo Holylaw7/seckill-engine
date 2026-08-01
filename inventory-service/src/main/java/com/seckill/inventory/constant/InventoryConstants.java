@@ -10,6 +10,8 @@ public final class InventoryConstants {
     public static final String TAG_CANCEL_ORDER = "CANCEL_ORDER";
     public static final String TAG_STOCK_RECOVER = "STOCK_RECOVER";
     public static final String CONSUMER_GROUP = "inventory-consumer";
+    /** 回补/取消消费组（独立组：避免与 CREATE_ORDER 同组时 tag 订阅被负载均衡拆分） */
+    public static final String CONSUMER_GROUP_RECOVER = "inventory-recover-consumer";
 
     public static final String FLOW_TYPE_INIT = "INIT";
     public static final String FLOW_TYPE_DEDUCT = "DEDUCT";

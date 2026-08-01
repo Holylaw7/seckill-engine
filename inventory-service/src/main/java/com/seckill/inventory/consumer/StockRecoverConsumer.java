@@ -21,7 +21,7 @@ import org.springframework.stereotype.Component;
 @RocketMQMessageListener(
         topic = InventoryConstants.MQ_TOPIC,
         selectorExpression = InventoryConstants.TAG_STOCK_RECOVER + " || " + InventoryConstants.TAG_CANCEL_ORDER,
-        consumerGroup = InventoryConstants.CONSUMER_GROUP)
+        consumerGroup = InventoryConstants.CONSUMER_GROUP_RECOVER)
 public class StockRecoverConsumer implements RocketMQListener<String> {
 
     private final InventoryService inventoryService;

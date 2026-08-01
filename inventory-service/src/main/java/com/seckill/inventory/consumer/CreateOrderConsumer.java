@@ -29,7 +29,9 @@ public class CreateOrderConsumer implements RocketMQListener<String> {
     public void onMessage(String payload) {
         CreateOrderMessage message = JsonUtils.fromJson(payload, CreateOrderMessage.class);
         try {
-            inventoryService.confirmDeduct(message);
+            boolean changed = inventoryService.confirmDeduct(message);
+            log.info("inventory confirm consumed, orderId={}, changed={}",
+                    message.getOrderId(), changed);
         } catch (BusinessException e) {
             // 数据异常（事实不足/不存在/冲突）：冻结差异 + 告警，不重试避免死循环
             log.error("inventory confirm failed, orderId={}, code={}, message={}",
