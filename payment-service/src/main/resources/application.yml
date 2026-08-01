@@ -1,0 +1,40 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: payment-service
+  datasource:
+    url: jdbc:mysql://localhost:3306/seckill_payment?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: payment_rw
+    password: change-me
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+rocketmq:
+  name-server: localhost:9876
+  producer:
+    group: payment-producer
+    send-message-timeout: 3000
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+seckill:
+  payment:
+    worker-id: 5
+    callback:
+      window-seconds: 300
+      ip-whitelist: ""
+    channel:
+      mock:
+        secret: mock-channel-secret
+        refund-fail: false
+    refund-compensate:
+      period-seconds: 60
+      batch-size: 100
