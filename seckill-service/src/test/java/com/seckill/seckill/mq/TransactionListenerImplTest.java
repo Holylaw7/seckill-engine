@@ -40,7 +40,7 @@ class TransactionListenerImplTest {
 
     private Message<String> message() {
         SeckillOrderMessage payload = new SeckillOrderMessage(
-                "msg-001", 10001L, 20001L, 30001L, "123", 1000L, 1, null);
+                "msg-001", 10001L, 20001L, 30001L, "123", 1000L, 1, null, 9900L);
         return MessageBuilder.withPayload(JsonUtils.toJson(payload)).build();
     }
 

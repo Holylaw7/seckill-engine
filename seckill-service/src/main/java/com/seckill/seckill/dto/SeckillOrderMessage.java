@@ -27,4 +27,7 @@ public class SeckillOrderMessage {
     private Integer quantity;
 
     private String traceId;
+
+    /** 金额快照（单位：分，冻结：order-service 建单依据，禁止客户端传入） */
+    private Long amount;
 }

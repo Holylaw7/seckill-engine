@@ -1,5 +1,6 @@
 package com.seckill.seckill.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.seckill.common.error.ErrorCode;
 import com.seckill.common.exception.BusinessException;
 import com.seckill.common.id.SnowflakeIdGenerator;
@@ -9,6 +10,8 @@ import com.seckill.seckill.dto.ExecuteRequest;
 import com.seckill.seckill.dto.ExecuteResponse;
 import com.seckill.seckill.dto.RiskCheckRequest;
 import com.seckill.seckill.dto.SeckillOrderMessage;
+import com.seckill.seckill.entity.SeckillSku;
+import com.seckill.seckill.mapper.SeckillSkuMapper;
 import com.seckill.seckill.mq.RocketMqProducer;
 import com.seckill.seckill.redis.StockDeductResult;
 import com.seckill.seckill.redis.StockService;
@@ -18,6 +21,8 @@ import com.seckill.seckill.service.SeckillService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.UUID;
 
 @Service
@@ -26,6 +31,7 @@ public class SeckillServiceImpl implements SeckillService {
 
     private final SessionCacheService sessionCacheService;
     private final StockService stockService;
+    private final SeckillSkuMapper skuMapper;
     private final RocketMqProducer mqProducer;
     private final RiskCheckClient riskCheckClient;
     private final SnowflakeIdGenerator snowflakeIdGenerator;
@@ -49,6 +55,15 @@ public class SeckillServiceImpl implements SeckillService {
                     String.valueOf(userId), ip, RiskCheckRequestAction.SECKILL, null));
         }
 
+        SeckillSku sku = skuMapper.selectOne(new LambdaQueryWrapper<SeckillSku>()
+                .eq(SeckillSku::getSessionId, request.getSessionId())
+                .eq(SeckillSku::getSkuId, request.getSkuId()));
+        if (sku == null || sku.getPrice() == null) {
+            throw new BusinessException(ErrorCode.INVENTORY_ERROR, "秒杀商品不存在");
+        }
+        long amountFen = sku.getPrice().multiply(BigDecimal.valueOf(100))
+                .setScale(0, RoundingMode.HALF_UP).longValueExact();
+
         long userKeyTtlSeconds = Math.max(1L,
                 (session.endTime() + SeckillConstants.USER_MARK_EXTRA_MILLIS - now) / 1000);
         StockDeductResult deduct = stockService.preDeduct(
@@ -62,7 +77,7 @@ public class SeckillServiceImpl implements SeckillService {
         SeckillOrderMessage message = new SeckillOrderMessage(
                 UUID.randomUUID().toString().replace("-", ""),
                 userId, request.getSkuId(), request.getSessionId(),
-                String.valueOf(orderId), now, request.getQuantity(), null);
+                String.valueOf(orderId), now, request.getQuantity(), null, amountFen);
         try {
             mqProducer.sendCreateOrder(message);
         } catch (BusinessException e) {

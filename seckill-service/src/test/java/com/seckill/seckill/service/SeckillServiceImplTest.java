@@ -7,6 +7,8 @@ import com.seckill.seckill.config.SeckillProperties;
 import com.seckill.seckill.dto.ExecuteRequest;
 import com.seckill.seckill.dto.ExecuteResponse;
 import com.seckill.seckill.dto.SeckillOrderMessage;
+import com.seckill.seckill.entity.SeckillSku;
+import com.seckill.seckill.mapper.SeckillSkuMapper;
 import com.seckill.seckill.mq.RocketMqProducer;
 import com.seckill.seckill.redis.StockDeductResult;
 import com.seckill.seckill.redis.StockService;
@@ -18,6 +20,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.math.BigDecimal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -37,6 +41,8 @@ class SeckillServiceImplTest {
     @Mock
     private StockService stockService;
     @Mock
+    private SeckillSkuMapper skuMapper;
+    @Mock
     private RocketMqProducer mqProducer;
     @Mock
     private RiskCheckClient riskCheckClient;
@@ -52,8 +58,17 @@ class SeckillServiceImplTest {
         properties.setWorkerId(2L);
         properties.setFlowKeyTtlSeconds(86400L);
         seckillService = new SeckillServiceImpl(
-                sessionCacheService, stockService, mqProducer, riskCheckClient,
+                sessionCacheService, stockService, skuMapper, mqProducer, riskCheckClient,
                 snowflakeIdGenerator, properties);
+    }
+
+    private void mockSku() {
+        SeckillSku sku = new SeckillSku();
+        sku.setId(40001L);
+        sku.setSessionId(30001L);
+        sku.setSkuId(20001L);
+        sku.setPrice(new BigDecimal("99.00"));
+        when(skuMapper.selectOne(any())).thenReturn(sku);
     }
 
     private SessionCacheService.SessionCache readySession(long startOffset, long endOffset) {
@@ -73,6 +88,7 @@ class SeckillServiceImplTest {
     @Test
     void executeShouldSucceedAndSendMessage() {
         when(sessionCacheService.getSession(30001L)).thenReturn(readySession(-1000L, 60000L));
+        mockSku();
         when(stockService.preDeduct(eq("20001"), eq("10001"), eq(1), any(Long.class)))
                 .thenReturn(StockDeductResult.SUCCESS);
         when(snowflakeIdGenerator.nextId()).thenReturn(123L);
@@ -93,6 +109,7 @@ class SeckillServiceImplTest {
         assertEquals(20001L, message.getSkuId());
         assertEquals(30001L, message.getSessionId());
         assertEquals(1, message.getQuantity());
+        assertEquals(9900L, message.getAmount());
     }
 
     @Test
@@ -126,6 +143,7 @@ class SeckillServiceImplTest {
     @Test
     void stockEmptyShouldMapTo30004() {
         when(sessionCacheService.getSession(30001L)).thenReturn(readySession(-1000L, 60000L));
+        mockSku();
         when(stockService.preDeduct(anyString(), anyString(), any(Integer.class), any(Long.class)))
                 .thenReturn(StockDeductResult.STOCK_EMPTY);
         BusinessException e = assertThrows(BusinessException.class,
@@ -137,6 +155,7 @@ class SeckillServiceImplTest {
     @Test
     void repeatBuyShouldMapTo30005() {
         when(sessionCacheService.getSession(30001L)).thenReturn(readySession(-1000L, 60000L));
+        mockSku();
         when(stockService.preDeduct(anyString(), anyString(), any(Integer.class), any(Long.class)))
                 .thenReturn(StockDeductResult.REPEAT_BUY);
         BusinessException e = assertThrows(BusinessException.class,
@@ -150,6 +169,7 @@ class SeckillServiceImplTest {
     void should_fail_fast_when_stock_not_ready() {
         // Arrange
         when(sessionCacheService.getSession(30001L)).thenReturn(readySession(-1000L, 60000L));
+        mockSku();
         when(stockService.preDeduct(anyString(), anyString(), any(Integer.class), any(Long.class)))
                 .thenReturn(StockDeductResult.NOT_READY);
 
@@ -177,6 +197,7 @@ class SeckillServiceImplTest {
     @Test
     void sendFailureShouldRecoverStockAndReturnBusy() {
         when(sessionCacheService.getSession(30001L)).thenReturn(readySession(-1000L, 60000L));
+        mockSku();
         when(stockService.preDeduct(anyString(), anyString(), any(Integer.class), any(Long.class)))
                 .thenReturn(StockDeductResult.SUCCESS);
         when(snowflakeIdGenerator.nextId()).thenReturn(123L);

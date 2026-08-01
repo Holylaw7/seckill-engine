@@ -6,6 +6,7 @@ import com.seckill.common.util.JsonUtils;
 import com.seckill.seckill.config.SeckillProperties;
 import com.seckill.seckill.constant.SeckillConstants;
 import com.seckill.seckill.dto.SeckillOrderMessage;
+import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.apache.rocketmq.spring.support.RocketMQHeaders;
@@ -20,6 +21,7 @@ import java.time.Duration;
  * 秒杀事务消息 Producer（seckill-order-tx / CREATE_ORDER，messageId 全链路冻结）。
  */
 @Component
+@Slf4j
 @RequiredArgsConstructor
 public class RocketMqProducer {
 
@@ -40,11 +42,16 @@ public class RocketMqProducer {
                     .withPayload(JsonUtils.toJson(message))
                     .setHeader(RocketMQHeaders.KEYS, message.getOrderId())
                     .build();
-            rocketMQTemplate.sendMessageInTransaction(
+            org.apache.rocketmq.client.producer.TransactionSendResult txResult = rocketMQTemplate.sendMessageInTransaction(
                     SeckillConstants.MQ_TOPIC + ":" + SeckillConstants.MQ_TAG_CREATE_ORDER,
                     mqMessage, message);
+            log.info("seckill tx message sent, orderId={}, messageId={}, txState={}, sendStatus={}, queue={}",
+                    message.getOrderId(), message.getMessageId(), txResult.getLocalTransactionState(),
+                    txResult.getSendStatus(), txResult.getMessageQueue());
             return true;
         } catch (Exception e) {
+            log.error("seckill order message send failed, orderId={}, messageId={}, error=",
+                    message.getOrderId(), message.getMessageId(), e);
             redisTemplate.delete(flowKey);
             throw new BusinessException(ErrorCode.SECKILL_BUSY, "秒杀消息发送失败");
         }

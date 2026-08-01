@@ -4,6 +4,7 @@ import com.seckill.common.error.ErrorCode;
 import com.seckill.common.exception.BusinessException;
 import com.seckill.seckill.config.SeckillProperties;
 import com.seckill.seckill.dto.SeckillOrderMessage;
+import org.apache.rocketmq.client.producer.TransactionSendResult;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,6 +23,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -47,13 +49,15 @@ class RocketMqProducerTest {
 
     private SeckillOrderMessage message() {
         return new SeckillOrderMessage(
-                "msg-001", 10001L, 20001L, 30001L, "123", 1000L, 1, null);
+                "msg-001", 10001L, 20001L, 30001L, "123", 1000L, 1, null, 9900L);
     }
 
     @Test
     void firstSendShouldUseTransactionMessage() {
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         when(valueOperations.setIfAbsent(eq("seckill:flow:123"), eq("1"), any(Duration.class))).thenReturn(true);
+        when(rocketMQTemplate.sendMessageInTransaction(anyString(), any(), any()))
+                .thenReturn(mock(TransactionSendResult.class));
 
         assertTrue(producer.sendCreateOrder(message()));
         verify(rocketMQTemplate).sendMessageInTransaction(

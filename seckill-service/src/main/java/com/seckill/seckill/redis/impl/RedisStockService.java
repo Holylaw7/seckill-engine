@@ -4,7 +4,6 @@ import com.seckill.seckill.constant.SeckillConstants;
 import com.seckill.seckill.redis.StockDeductResult;
 import com.seckill.seckill.redis.StockRecoverResult;
 import com.seckill.seckill.redis.StockService;
-import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
@@ -13,16 +12,19 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 
 @Service
-@RequiredArgsConstructor
 public class RedisStockService implements StockService {
 
-    @Qualifier("seckillDeductScript")
     private final DefaultRedisScript<Long> deductScript;
-
-    @Qualifier("seckillRecoverScript")
     private final DefaultRedisScript<Long> recoverScript;
-
     private final StringRedisTemplate redisTemplate;
+
+    public RedisStockService(@Qualifier("seckillDeductScript") DefaultRedisScript<Long> deductScript,
+                             @Qualifier("seckillRecoverScript") DefaultRedisScript<Long> recoverScript,
+                             StringRedisTemplate redisTemplate) {
+        this.deductScript = deductScript;
+        this.recoverScript = recoverScript;
+        this.redisTemplate = redisTemplate;
+    }
 
     @Override
     public StockDeductResult preDeduct(String skuId, String userId, int quantity, long userKeyTtlSeconds) {
