@@ -1,0 +1,39 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: order-service
+  datasource:
+    url: jdbc:mysql://localhost:3306/seckill_order?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: order_rw
+    password: change-me
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+rocketmq:
+  name-server: localhost:9876
+  producer:
+    group: order-producer
+    send-message-timeout: 3000
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+seckill:
+  order:
+    worker-id: 4
+    pay-deadline-minutes: 15
+    timeout-close:
+      period-seconds: 30
+      batch-size: 200
+    cancel-notify-compensate-period-seconds: 60
+    pre-deduct-confirm:
+      # seckill-service 内部确认接口（已实现）
+      base-url: http://localhost:8082
+      path: /api/v1/seckill/internal/pre-deducts/confirm
