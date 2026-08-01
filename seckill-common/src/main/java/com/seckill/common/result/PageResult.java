@@ -1,6 +1,7 @@
 package com.seckill.common.result;
 
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.io.Serializable;
 import java.util.List;
@@ -9,6 +10,7 @@ import java.util.List;
  * 统一分页返回结构。
  */
 @Data
+@NoArgsConstructor
 public class PageResult<T> implements Serializable {
 
     private static final long serialVersionUID = 1L;
