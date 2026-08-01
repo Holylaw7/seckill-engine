@@ -1,0 +1,46 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: gateway
+  cloud:
+    gateway:
+      routes:
+        - id: auth-service
+          uri: http://localhost:8081
+          predicates:
+            - Path=/api/v1/auth/**
+        - id: seckill-service
+          uri: http://localhost:8082
+          predicates:
+            - Path=/api/v1/seckill/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                key-resolver: '#{@rateLimitKeyResolver}'
+                redis-rate-limiter.replenishRate: 100
+                redis-rate-limiter.burstCapacity: 200
+        - id: order-service
+          uri: http://localhost:8083
+          predicates:
+            - Path=/api/v1/orders/**
+        - id: payment-service
+          uri: http://localhost:8084
+          predicates:
+            - Path=/api/v1/payments/**
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+seckill:
+  gateway:
+    jwt:
+      enabled: true
+      secret: seckill-engine-dev-secret-change-me
+
+# 说明（冻结）：
+# - 基础版路由使用静态 URI，生产环境 Phase 7 切换为 lb://服务名 + Nacos 服务发现；
+# - 限流参数为基础值，Phase 5 压测后经 Nacos 动态校准；
+# - 黑名单 key：risk:blacklist:ip:{ip} / risk:blacklist:user:{userId}（对齐 Redis 设计）。
