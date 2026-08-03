@@ -135,13 +135,32 @@ public abstract class IntegrationTestBase extends AbstractIntegrationTest {
                 List<String> keys = new ArrayList<>();
                 io.lettuce.core.KeyScanCursor<String> cursor =
                         commands.scan(ScanArgs.Builder.matches(pattern).limit(1000));
-                while (!cursor.isFinished()) {
+                while (true) {
                     keys.addAll(cursor.getKeys());
+                    if (cursor.isFinished()) {
+                        break;
+                    }
                     cursor = commands.scan(cursor, ScanArgs.Builder.matches(pattern).limit(1000));
                 }
                 if (!keys.isEmpty()) {
                     commands.del(keys.toArray(String[]::new));
                 }
+            }
+        }
+    }
+
+    protected static long countRedisKeys(String pattern) {
+        try (StatefulRedisConnection<String, String> connection = RedisClient.create(redisUri()).connect()) {
+            RedisCommands<String, String> commands = connection.sync();
+            long count = 0;
+            io.lettuce.core.KeyScanCursor<String> cursor =
+                    commands.scan(ScanArgs.Builder.matches(pattern).limit(1000));
+            while (true) {
+                count += cursor.getKeys().size();
+                if (cursor.isFinished()) {
+                    return count;
+                }
+                cursor = commands.scan(cursor, ScanArgs.Builder.matches(pattern).limit(1000));
             }
         }
     }
@@ -176,6 +195,20 @@ public abstract class IntegrationTestBase extends AbstractIntegrationTest {
 
     private static String redisUri() {
         return "redis://" + REDIS.getHost() + ":" + REDIS.getMappedPort(6379);
+    }
+
+    // ==================== 测试服务支撑 ====================
+
+    protected static String redisHost() {
+        return REDIS.getHost();
+    }
+
+    protected static int redisPort() {
+        return REDIS.getMappedPort(6379);
+    }
+
+    protected static String rocketMqNameServer() {
+        return ROCKETMQ.getHost() + ":" + ROCKETMQ.getMappedPort(9876);
     }
 
     // ==================== RocketMQ ====================
