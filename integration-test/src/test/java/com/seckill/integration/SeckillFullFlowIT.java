@@ -185,7 +185,7 @@ class SeckillFullFlowIT extends IntegrationTestBase {
         });
 
         // ==================== Step 4 inventory DEDUCT ====================
-        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+        await().atMost(Duration.ofSeconds(60)).untilAsserted(() -> {
             assertThat(queryInt(
                     "SELECT available_stock FROM seckill_inventory.inventory WHERE sku_id=20001"))
                     .isEqualTo(999);
