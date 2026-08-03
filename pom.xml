@@ -156,6 +156,8 @@
                     <version>${maven-compiler-plugin.version}</version>
                     <configuration>
                         <release>21</release>
+                        <!-- 保留方法参数名：@RequestParam/@PathVariable/@RequestHeader 省略名称时依赖 -parameters -->
+                        <parameters>true</parameters>
                         <encoding>UTF-8</encoding>
                     </configuration>
                 </plugin>
