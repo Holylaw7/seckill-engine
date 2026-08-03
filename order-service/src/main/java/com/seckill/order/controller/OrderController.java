@@ -26,7 +26,7 @@ public class OrderController {
     private final OrderService orderService;
 
     @GetMapping("/{orderId}")
-    public Result<OrderDetailResponse> detail(@PathVariable String orderId,
+    public Result<OrderDetailResponse> detail(@PathVariable("orderId") String orderId,
                                               @RequestHeader(value = OrderConstants.HEADER_USER_ID, required = false) String userId) {
         requireUserId(userId);
         return Result.success(orderService.getOrderDetail(Long.parseLong(userId), orderId));
@@ -42,7 +42,7 @@ public class OrderController {
     }
 
     @PostMapping("/{orderId}/cancel")
-    public Result<Void> cancel(@PathVariable String orderId,
+    public Result<Void> cancel(@PathVariable("orderId") String orderId,
                                @RequestHeader(value = OrderConstants.HEADER_USER_ID, required = false) String userId) {
         requireUserId(userId);
         SeckillOrder order = orderService.prepareCancel(Long.parseLong(userId), orderId);
@@ -51,7 +51,7 @@ public class OrderController {
     }
 
     @GetMapping("/{orderId}/status")
-    public Result<OrderStatusResponse> status(@PathVariable String orderId,
+    public Result<OrderStatusResponse> status(@PathVariable("orderId") String orderId,
                                               @RequestHeader(value = OrderConstants.HEADER_USER_ID, required = false) String userId) {
         requireUserId(userId);
         return Result.success(orderService.getOrderStatus(Long.parseLong(userId), orderId));
