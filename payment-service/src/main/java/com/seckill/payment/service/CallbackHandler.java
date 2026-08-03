@@ -66,12 +66,12 @@ public class CallbackHandler {
         // 4 金额校验（禁止相信客户端金额）
         PaymentOrder payment = paymentService.getByPaymentNo(context.paymentNo());
         if (payment == null) {
-            saveLog(context, PaymentConstants.VERIFY_FAIL, PaymentConstants.PROCESS_FAILED);
+            markLogResult(context, PaymentConstants.VERIFY_FAIL, PaymentConstants.PROCESS_FAILED);
             log.error("callback payment not found, paymentNo={}", context.paymentNo());
             return CallbackResult.rejected("支付单不存在");
         }
         if (context.amount().compareTo(payment.getAmount()) != 0) {
-            saveLog(context, PaymentConstants.VERIFY_AMOUNT_MISMATCH, PaymentConstants.PROCESS_FAILED);
+            markLogResult(context, PaymentConstants.VERIFY_AMOUNT_MISMATCH, PaymentConstants.PROCESS_FAILED);
             log.error("callback amount mismatch, paymentNo={}, expect={}, actual={}",
                     context.paymentNo(), payment.getAmount(), context.amount());
             return CallbackResult.rejected("金额不符");
@@ -122,6 +122,23 @@ public class CallbackHandler {
         if (row != null) {
             row.setProcessStatus(processStatus);
             callbackLogMapper.updateById(row);
+        }
+    }
+
+    /**
+     * 校验/处理失败原因回填到防重放日志行：
+     * 防重放落库已占用 uk_callback_transaction，失败原因必须更新既有行，禁止二次插入。
+     */
+    private void markLogResult(CallbackContext context, String verifyResult, String processStatus) {
+        PaymentCallbackLog row = callbackLogMapper.selectOne(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<PaymentCallbackLog>()
+                        .eq(PaymentCallbackLog::getChannelTransactionNo, context.channelTransactionNo()));
+        if (row != null) {
+            row.setVerifyResult(verifyResult);
+            row.setProcessStatus(processStatus);
+            callbackLogMapper.updateById(row);
+        } else {
+            saveLog(context, verifyResult, processStatus);
         }
     }
 }
