@@ -2,6 +2,7 @@ package com.seckill.integration.support;
 
 import com.seckill.common.result.Result;
 import com.seckill.common.util.JsonUtils;
+import com.seckill.inventory.dto.ReconcileReport;
 import com.seckill.payment.dto.CreatePayRequest;
 import com.seckill.payment.dto.CreatePayResponse;
 import com.seckill.seckill.dto.ExecuteRequest;
@@ -83,6 +84,12 @@ public final class TestHttp {
         return REST.exchange(baseUrl + "/api/v1/orders/" + orderId + "/cancel", HttpMethod.POST,
                 new HttpEntity<>(null, headers(userId, traceId)),
                 new ParameterizedTypeReference<Result<Void>>() {
+                }).getBody();
+    }
+
+    public static Result<ReconcileReport> reconcile(String baseUrl, long skuId) {
+        return REST.exchange(baseUrl + "/api/v1/inventory/admin/reconcile?skuId=" + skuId, HttpMethod.GET,
+                null, new ParameterizedTypeReference<Result<ReconcileReport>>() {
                 }).getBody();
     }
 

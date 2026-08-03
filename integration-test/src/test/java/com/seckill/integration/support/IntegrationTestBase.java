@@ -17,6 +17,8 @@ import org.springframework.jdbc.datasource.init.ScriptUtils;
 
 import static org.awaitility.Awaitility.await;
 
+import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -75,10 +77,34 @@ public abstract class IntegrationTestBase extends AbstractIntegrationTest {
     }
 
     /**
+     * MySQL 容器重启后幂等重建 5 个服务 schema（仅 V1.0 建库建表脚本）并恢复 test 用户全局授权。
+     * 不重放 test-data 种子，避免唯一键重复。
+     */
+    protected static void restoreMysqlSchemas() throws Exception {
+        try (Connection connection = DriverManager.getConnection(
+                "jdbc:mysql://" + MYSQL.getHost() + ":" + MYSQL.getMappedPort(3306)
+                        + "/?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai",
+                "root", MYSQL.getPassword())) {
+            for (String script : List.of(
+                    "sql/auth-service/V1.0__init.sql",
+                    "sql/seckill-service/V1.0__init.sql",
+                    "sql/inventory-service/V1.0__init.sql",
+                    "sql/order-service/V1.0__init.sql",
+                    "sql/payment-service/V1.0__init.sql")) {
+                ScriptUtils.executeSqlScript(connection, new ClassPathResource(script));
+            }
+            try (java.sql.Statement statement = connection.createStatement()) {
+                statement.execute("GRANT ALL PRIVILEGES ON *.* TO 'test'@'%'");
+                statement.execute("FLUSH PRIVILEGES");
+            }
+        }
+    }
+
+    /**
      * 显式创建冻结 Topic（seckill-order-tx）：
      * 绕过 broker autoCreateTopicEnable 开关差异，幂等可重复执行。
      */
-    private static void ensureRocketMqTopic() {
+    protected static void ensureRocketMqTopic() {
         try {
             ExecResult result = ROCKETMQ.execInContainer(
                     "sh", "-c",
@@ -106,6 +132,59 @@ public abstract class IntegrationTestBase extends AbstractIntegrationTest {
              Statement statement = connection.createStatement()) {
             statement.execute(sql);
         }
+    }
+
+    /**
+     * 以 root 身份执行权限类 SQL（REVOKE/GRANT/FLUSH PRIVILEGES），供故障注入使用。
+     */
+    protected static void executeAsRoot(String sql) throws Exception {
+        try (Connection connection = DriverManager.getConnection(
+                "jdbc:mysql://" + MYSQL.getHost() + ":" + MYSQL.getMappedPort(3306)
+                        + "/?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai",
+                "root", MYSQL.getPassword());
+             Statement statement = connection.createStatement()) {
+            statement.execute(sql);
+        }
+    }
+
+    /**
+     * 断开 test 用户当前所有连接（配合 ACCOUNT LOCK 模拟数据库连接异常）。
+     */
+    protected static void killTestConnections() throws Exception {
+        try (Connection connection = DriverManager.getConnection(
+                "jdbc:mysql://" + MYSQL.getHost() + ":" + MYSQL.getMappedPort(3306)
+                        + "/?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai",
+                "root", MYSQL.getPassword());
+             Statement statement = connection.createStatement();
+             ResultSet resultSet = statement.executeQuery(
+                     "SELECT id FROM information_schema.processlist "
+                             + "WHERE user='test' AND id <> CONNECTION_ID()")) {
+            List<String> ids = new ArrayList<>();
+            while (resultSet.next()) {
+                ids.add(resultSet.getString(1));
+            }
+            for (String id : ids) {
+                try (Statement kill = connection.createStatement()) {
+                    kill.execute("KILL " + id);
+                } catch (Exception ignored) {
+                    // 连接可能已关闭
+                }
+            }
+        }
+    }
+
+    /**
+     * 准备写失败注入专用账号（幂等）：
+     * order_fault 无 seckill_order.INSERT、inventory_fault 无 seckill_inventory.INSERT，
+     * 其余权限正常，保证 SELECT/连接可用、INSERT 被确定性拒绝。
+     */
+    protected static void prepareFaultUsers() throws Exception {
+        executeAsRoot("CREATE USER IF NOT EXISTS 'order_fault'@'%' IDENTIFIED BY 'test'");
+        executeAsRoot("CREATE USER IF NOT EXISTS 'inventory_fault'@'%' IDENTIFIED BY 'test'");
+        executeAsRoot("GRANT SELECT ON *.* TO 'order_fault'@'%'");
+        executeAsRoot("GRANT SELECT ON *.* TO 'inventory_fault'@'%'");
+        executeAsRoot("GRANT INSERT,UPDATE,DELETE ON seckill_order.* TO 'order_fault'@'%'");
+        executeAsRoot("GRANT INSERT,UPDATE,DELETE ON seckill_inventory.* TO 'inventory_fault'@'%'");
     }
 
     protected static String queryString(String sql) throws Exception {
@@ -209,6 +288,39 @@ public abstract class IntegrationTestBase extends AbstractIntegrationTest {
 
     protected static String rocketMqNameServer() {
         return ROCKETMQ.getHost() + ":" + ROCKETMQ.getMappedPort(9876);
+    }
+
+    // ==================== 故障演练恢复探测 ====================
+
+    protected static void awaitRedisReady(Duration timeout) {
+        await().atMost(timeout).until(() -> {
+            try {
+                return "PONG".equals(redisPing());
+            } catch (Exception e) {
+                return false;
+            }
+        });
+    }
+
+    protected static void awaitMysqlReady(Duration timeout) {
+        await().atMost(timeout).until(() -> {
+            try {
+                return queryInt("SELECT 1") == 1;
+            } catch (Exception e) {
+                return false;
+            }
+        });
+    }
+
+    protected static void awaitRocketMqReady(Duration timeout) {
+        await().atMost(timeout).until(() -> {
+            try (Socket socket = new Socket()) {
+                socket.connect(new InetSocketAddress(ROCKETMQ.getHost(), ROCKETMQ.getMappedPort(9876)), 3000);
+                return true;
+            } catch (Exception e) {
+                return false;
+            }
+        });
     }
 
     // ==================== RocketMQ ====================
