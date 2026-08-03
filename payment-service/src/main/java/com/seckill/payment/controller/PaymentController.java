@@ -48,7 +48,7 @@ public class PaymentController {
      * 渠道回调（网关白名单放行，验签在服务内完成）。
      */
     @PostMapping("/callback/{channel}")
-    public ResponseEntity<String> callback(@PathVariable String channel,
+    public ResponseEntity<String> callback(@PathVariable("channel") String channel,
                                            @RequestBody String rawBody,
                                            @RequestHeader(value = PaymentConstants.HEADER_SIGN, required = false) String sign,
                                            @RequestHeader(value = PaymentConstants.HEADER_TIMESTAMP, required = false) String timestampHeader,
