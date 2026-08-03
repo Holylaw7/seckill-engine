@@ -24,9 +24,18 @@ public final class LoadReport {
     }
 
     public static Path writeJson(String scenario, LoadMetrics metrics, Path directory) throws IOException {
+        return writeJson(scenario, metrics, null, directory);
+    }
+
+    public static Path writeJson(String scenario, LoadMetrics metrics,
+                                 Map<String, Object> extra, Path directory) throws IOException {
         Files.createDirectories(directory);
         Path file = directory.resolve(scenario + ".json");
-        MAPPER.writerWithDefaultPrettyPrinter().writeValue(file.toFile(), fields(scenario, metrics));
+        Map<String, Object> fields = fields(scenario, metrics);
+        if (extra != null) {
+            fields.putAll(extra);
+        }
+        MAPPER.writerWithDefaultPrettyPrinter().writeValue(file.toFile(), fields);
         return file;
     }
 
@@ -63,18 +72,19 @@ public final class LoadReport {
     }
 
     private static String csvLine(String scenario, LoadMetrics metrics) {
-        return String.join(",", "scenario,total,success,failed,qps,avgRT,p50,p95,p99,timestamp",
-                String.join(",",
-                        scenario,
-                        String.valueOf(metrics.totalRequests()),
-                        String.valueOf(metrics.successCount()),
-                        String.valueOf(metrics.failureCount()),
-                        String.valueOf(round(metrics.qps())),
-                        String.valueOf(round(metrics.avgRtMs())),
-                        String.valueOf(round(metrics.p50Ms())),
-                        String.valueOf(round(metrics.p95Ms())),
-                        String.valueOf(round(metrics.p99Ms())),
-                        Instant.ofEpochMilli(metrics.endTimeMillis()).toString()));
+        String header = "scenario,total,success,failed,qps,avgRT,p50,p95,p99,timestamp";
+        String row = String.join(",",
+                scenario,
+                String.valueOf(metrics.totalRequests()),
+                String.valueOf(metrics.successCount()),
+                String.valueOf(metrics.failureCount()),
+                String.valueOf(round(metrics.qps())),
+                String.valueOf(round(metrics.avgRtMs())),
+                String.valueOf(round(metrics.p50Ms())),
+                String.valueOf(round(metrics.p95Ms())),
+                String.valueOf(round(metrics.p99Ms())),
+                Instant.ofEpochMilli(metrics.endTimeMillis()).toString());
+        return header + System.lineSeparator() + row;
     }
 
     private static double round(double value) {

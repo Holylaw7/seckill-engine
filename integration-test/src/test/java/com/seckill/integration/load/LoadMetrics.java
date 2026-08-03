@@ -10,24 +10,30 @@ public final class LoadMetrics {
     private final int totalRequests;
     private final int successCount;
     private final int failureCount;
+    private final long startEpochMillis;
+    private final long endEpochMillis;
     private final long startNanos;
     private final long endNanos;
     private final long[] latenciesNanos;
 
     private LoadMetrics(int totalRequests, int successCount, int failureCount,
+                        long startEpochMillis, long endEpochMillis,
                         long startNanos, long endNanos, long[] latenciesNanos) {
         this.totalRequests = totalRequests;
         this.successCount = successCount;
         this.failureCount = failureCount;
+        this.startEpochMillis = startEpochMillis;
+        this.endEpochMillis = endEpochMillis;
         this.startNanos = startNanos;
         this.endNanos = endNanos;
         this.latenciesNanos = latenciesNanos;
     }
 
     public static LoadMetrics of(int totalRequests, int successCount, int failureCount,
+                                 long startEpochMillis, long endEpochMillis,
                                  long startNanos, long endNanos, long[] latenciesNanos) {
         return new LoadMetrics(totalRequests, successCount, failureCount,
-                startNanos, endNanos, latenciesNanos);
+                startEpochMillis, endEpochMillis, startNanos, endNanos, latenciesNanos);
     }
 
     public int totalRequests() {
@@ -47,11 +53,11 @@ public final class LoadMetrics {
     }
 
     public long startTimeMillis() {
-        return startNanos / 1_000_000;
+        return startEpochMillis;
     }
 
     public long endTimeMillis() {
-        return endNanos / 1_000_000;
+        return endEpochMillis;
     }
 
     public long durationMillis() {

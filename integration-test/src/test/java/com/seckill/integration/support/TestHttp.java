@@ -2,6 +2,8 @@ package com.seckill.integration.support;
 
 import com.seckill.common.result.Result;
 import com.seckill.common.util.JsonUtils;
+import com.seckill.auth.dto.LoginRequest;
+import com.seckill.auth.dto.LoginResponse;
 import com.seckill.inventory.dto.ReconcileReport;
 import com.seckill.payment.dto.CreatePayRequest;
 import com.seckill.payment.dto.CreatePayResponse;
@@ -55,13 +57,32 @@ public final class TestHttp {
     public static Result<ExecuteResponse> execute(String baseUrl, long userId,
                                                   long sessionId, long skuId,
                                                   int quantity, String traceId) {
+        return executeWithAuth(baseUrl, userId, sessionId, skuId, quantity, traceId, null);
+    }
+
+    public static Result<ExecuteResponse> executeWithAuth(String baseUrl, long userId,
+                                                          long sessionId, long skuId,
+                                                          int quantity, String traceId, String token) {
         ExecuteRequest request = new ExecuteRequest();
         request.setSessionId(sessionId);
         request.setSkuId(skuId);
         request.setQuantity(quantity);
+        HttpHeaders headers = headers(userId, traceId);
+        if (token != null && !token.isBlank()) {
+            headers.setBearerAuth(token);
+        }
         return REST.exchange(baseUrl + "/api/v1/seckill/execute", HttpMethod.POST,
-                new HttpEntity<>(request, headers(userId, traceId)),
+                new HttpEntity<>(request, headers),
                 new ParameterizedTypeReference<Result<ExecuteResponse>>() {
+                }).getBody();
+    }
+
+    public static Result<LoginResponse> login(String baseUrl, String username, String password) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        return REST.exchange(baseUrl + "/api/v1/auth/login", HttpMethod.POST,
+                new HttpEntity<>(new LoginRequest(username, password), headers),
+                new ParameterizedTypeReference<Result<LoginResponse>>() {
                 }).getBody();
     }
 

@@ -59,14 +59,17 @@ public final class LoadTestExecutor {
                 });
             }
 
+            long startEpochMillis = System.currentTimeMillis();
             long startNanos = System.nanoTime();
             barrier.countDown();
             if (!done.await(config.timeout().toMillis(), TimeUnit.MILLISECONDS)) {
                 throw new TimeoutException("load execution timed out after " + config.timeout()
                         + ", completed=" + (success.get() + failure.get()) + "/" + total);
             }
+            long endEpochMillis = System.currentTimeMillis();
             long endNanos = System.nanoTime();
-            return LoadMetrics.of(total, success.get(), failure.get(), startNanos, endNanos, latencies);
+            return LoadMetrics.of(total, success.get(), failure.get(),
+                    startEpochMillis, endEpochMillis, startNanos, endNanos, latencies);
         } finally {
             pool.shutdownNow();
         }
