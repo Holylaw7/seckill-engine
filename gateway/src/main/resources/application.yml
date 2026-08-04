@@ -1,11 +1,25 @@
 server:
   port: 8080
+  netty:
+    # Phase 6.3 容量调优：容量基准在 ≥1000 并发出现连接排队/超时（默认 8192 连接），
+    # 提高接入连接上限并收紧建连超时（基于 GATEWAY_CAPACITY 数据）
+    max-connections: 20000
+    connection-timeout: 5000
 
 spring:
   application:
     name: gateway
   cloud:
     gateway:
+      httpclient:
+        # 容量调优：默认固定池 500 连接，1000+ 并发出现 acquire 排队与超时
+        pool:
+          type: fixed
+          max-connections: 2000
+          max-pending-acquire: 10000
+          acquire-timeout: 10000
+        connect-timeout: 5000
+        response-timeout: 30s
       routes:
         - id: auth-service
           uri: http://localhost:8081
