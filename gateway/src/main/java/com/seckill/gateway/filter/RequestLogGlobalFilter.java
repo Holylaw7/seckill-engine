@@ -38,6 +38,9 @@ public class RequestLogGlobalFilter implements GlobalFilter, Ordered {
                     status == null ? "-" : status.value(),
                     System.currentTimeMillis() - start,
                     request.getRemoteAddress());
+            if (log.isDebugEnabled()) {
+                log.debug("gateway request headers traceId={} headers={}", traceId, request.getHeaders());
+            }
             profileRecorder.record(exchange, "log", logStart);
             profileRecorder.recordSnapshot(exchange, startNanos);
         });
