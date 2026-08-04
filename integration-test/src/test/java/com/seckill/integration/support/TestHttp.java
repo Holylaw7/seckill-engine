@@ -89,6 +89,35 @@ public final class TestHttp {
                 }).getBody();
     }
 
+    /** 返回原始响应（含 HTTP 状态码），供限流/容量基准使用 */
+    public static ResponseEntity<String> executeRaw(String baseUrl, long userId,
+                                                    long sessionId, long skuId,
+                                                    int quantity, String traceId, String token) {
+        return executeRaw(REST, baseUrl, userId, sessionId, skuId, quantity, traceId, token);
+    }
+
+    /** 4xx 不抛异常的原始执行（限流 429 需按状态码统计） */
+    public static ResponseEntity<String> executeRawNoError(String baseUrl, long userId,
+                                                           long sessionId, long skuId,
+                                                           int quantity, String traceId, String token) {
+        return executeRaw(CALLBACK_REST, baseUrl, userId, sessionId, skuId, quantity, traceId, token);
+    }
+
+    private static ResponseEntity<String> executeRaw(RestTemplate rest, String baseUrl, long userId,
+                                                      long sessionId, long skuId,
+                                                      int quantity, String traceId, String token) {
+        ExecuteRequest request = new ExecuteRequest();
+        request.setSessionId(sessionId);
+        request.setSkuId(skuId);
+        request.setQuantity(quantity);
+        HttpHeaders headers = headers(userId, traceId);
+        if (token != null && !token.isBlank()) {
+            headers.setBearerAuth(token);
+        }
+        return rest.exchange(baseUrl + "/api/v1/seckill/execute", HttpMethod.POST,
+                new HttpEntity<>(request, headers), String.class);
+    }
+
     public static Result<LoginResponse> login(String baseUrl, String username, String password) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
