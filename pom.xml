@@ -49,6 +49,7 @@
         <testcontainers.version>1.21.4</testcontainers.version>
         <!-- 默认排除 chaos 标签（故障演练）；CI 集成阶段用 -Dchaos.excluded= 放开执行 30 项集成+演练 -->
         <chaos.excluded>chaos</chaos.excluded>
+        <jacoco.version>0.8.12</jacoco.version>
 
         <!-- 构建插件版本 -->
         <maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
@@ -150,6 +151,40 @@
     </dependencyManagement>
 
     <build>
+        <plugins>
+            <!-- JaCoCo：仅统计生产代码（src/main/java），排除 DTO/VO/配置/启动类 -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco.version}</version>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <!-- 使用 ASCII 临时目录，规避 Windows 中文工作区路径经 cmd.exe 传给 javaagent 损坏的问题 -->
+                    <destFile>${java.io.tmpdir}/${project.artifactId}-jacoco.exec</destFile>
+                    <dataFile>${java.io.tmpdir}/${project.artifactId}-jacoco.exec</dataFile>
+                    <excludes>
+                        <exclude>**/dto/**</exclude>
+                        <exclude>**/vo/**</exclude>
+                        <exclude>**/config/**</exclude>
+                        <exclude>**/*Application.class</exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+        </plugins>
         <pluginManagement>
             <plugins>
                 <plugin>
@@ -169,6 +204,7 @@
                     <version>${maven-surefire-plugin.version}</version>
                     <configuration>
                         <excludedGroups>${chaos.excluded}</excludedGroups>
+                        <argLine>@{argLine}</argLine>
                     </configuration>
                 </plugin>
                 <plugin>
