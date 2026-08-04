@@ -1,8 +1,8 @@
 # Release Check Report
 
-Commit: d9888cf
+Commit: 48d3353
 Branch: feature/phase5-test
-Build time: 2026-08-04 14:40:21 +0800
+Build time: 2026-08-04 14:56:59 +0800
 
 ## Git Status
 
@@ -12,24 +12,24 @@ Status: PASS
 
 Status: PASS
 
-Surefire report files: 64, failures: 0, errors: 0
+Surefire report files: 70, failures: 0, errors: 0
 
 ## Coverage
 
-Status: FAIL
+Status: PASS
 
-Overall line coverage: 76.49% (gate ≥70%)
+Overall line coverage: 84.35% (gate ≥70%)
 
 | 模块 | 覆盖率 | 门禁 |
 | --- | --- | --- |
 | seckill-common | 93.27% (gate 70%) | PASS |
 | gateway | 79.69% (gate 70%) | PASS |
 | auth-service | 76.77% (gate 70%) | PASS |
-| seckill-service | 68.26% (gate 80%) | FAIL |
+| seckill-service | 91.69% (gate 80%) | PASS |
 | inventory-service | 84.79% (gate 80%) | PASS |
 | order-service | 76.88% (gate 75%) | PASS |
-| payment-service | 70.22% (gate 75%) | FAIL |
+| payment-service | 86.21% (gate 75%) | PASS |
 
 ## Release Gate
 
-Gate: FAIL
+Gate: PASS
