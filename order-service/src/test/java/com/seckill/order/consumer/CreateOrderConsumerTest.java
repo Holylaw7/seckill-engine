@@ -34,7 +34,7 @@ class CreateOrderConsumerTest {
 
     private String payload() {
         CreateOrderMessage message = new CreateOrderMessage(
-                "msg-001", 10001L, 20001L, 30001L, "123", 1000L, 1, 9900L, null);
+            "msg-001", 10001L, 20001L, 30001L, "123", 1000L, 1, 9900L, null, null);
         return JsonUtils.toJson(message);
     }
 

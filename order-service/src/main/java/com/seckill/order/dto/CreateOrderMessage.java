@@ -30,4 +30,7 @@ public class CreateOrderMessage {
     private Long amount;
 
     private String traceId;
+
+    /** 命中桶号（Phase 6.2 可选；order 建单不感知分桶，字段仅透传兼容） */
+    private Integer bucketNo;
 }
