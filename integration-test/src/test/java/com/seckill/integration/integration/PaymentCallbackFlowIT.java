@@ -1,4 +1,4 @@
-package com.seckill.integration;
+package com.seckill.integration.integration;
 
 import com.seckill.common.result.Result;
 import com.seckill.integration.support.IntegrationTestBase;

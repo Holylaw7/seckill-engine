@@ -18,6 +18,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
+@org.junit.jupiter.api.Tag("unit")
 class CreateOrderConsumerTest {
 
     @Mock

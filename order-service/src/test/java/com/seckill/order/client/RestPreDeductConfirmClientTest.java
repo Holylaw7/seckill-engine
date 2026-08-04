@@ -14,6 +14,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+@org.junit.jupiter.api.Tag("unit")
 class RestPreDeductConfirmClientTest {
 
     private static final String BASE_URL = "http://localhost:8082";

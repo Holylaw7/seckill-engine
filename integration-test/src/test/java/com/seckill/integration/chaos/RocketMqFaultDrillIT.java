@@ -1,4 +1,4 @@
-package com.seckill.integration;
+package com.seckill.integration.chaos;
 
 import com.seckill.common.result.Result;
 import com.seckill.inventory.InventoryApplication;
@@ -29,7 +29,6 @@ import static org.awaitility.Awaitility.await;
  * 独立运行（Q-01 停/启共享 RocketMQ 容器）。
  */
 @Tag("chaos")
-@Tag("integration")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class RocketMqFaultDrillIT extends IntegrationTestBase {
 

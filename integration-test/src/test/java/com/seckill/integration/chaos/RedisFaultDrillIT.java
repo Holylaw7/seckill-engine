@@ -1,4 +1,4 @@
-package com.seckill.integration;
+package com.seckill.integration.chaos;
 
 import com.seckill.common.result.Result;
 import com.seckill.inventory.InventoryApplication;
@@ -31,7 +31,6 @@ import static org.awaitility.Awaitility.await;
  * 独立运行（停/启共享 Redis 容器），禁止与其他集成测试同 JVM 混跑。
  */
 @Tag("chaos")
-@Tag("integration")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class RedisFaultDrillIT extends IntegrationTestBase {
 

@@ -47,6 +47,8 @@
         <!-- 测试基础设施 -->
         <!-- 1.21.4+ 修复新版 Docker Desktop 命名管道 400 兼容问题（docker-java transport） -->
         <testcontainers.version>1.21.4</testcontainers.version>
+        <!-- 默认排除 chaos 标签（故障演练）；CI 集成阶段用 -Dchaos.excluded= 放开执行 30 项集成+演练 -->
+        <chaos.excluded>chaos</chaos.excluded>
 
         <!-- 构建插件版本 -->
         <maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
@@ -165,6 +167,9 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>${maven-surefire-plugin.version}</version>
+                    <configuration>
+                        <excludedGroups>${chaos.excluded}</excludedGroups>
+                    </configuration>
                 </plugin>
                 <plugin>
                     <groupId>org.springframework.boot</groupId>

@@ -1,4 +1,4 @@
-package com.seckill.integration;
+package com.seckill.integration.integration;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.seckill.common.result.Result;

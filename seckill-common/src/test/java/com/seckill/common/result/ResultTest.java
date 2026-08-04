@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
+@org.junit.jupiter.api.Tag("unit")
 class ResultTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper();

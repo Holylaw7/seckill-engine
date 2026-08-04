@@ -13,6 +13,7 @@ import static org.awaitility.Awaitility.await;
  * 压测框架冒烟验证（不依赖容器、不依赖 Docker CLI）：
  * 并发执行、指标计算、报告输出、资源监控采样。
  */
+@org.junit.jupiter.api.Tag("unit")
 class LoadFrameworkSmokeTest {
 
     @Test

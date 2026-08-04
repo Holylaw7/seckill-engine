@@ -1,4 +1,4 @@
-package com.seckill.integration;
+package com.seckill.integration.chaos;
 
 import com.seckill.common.result.Result;
 import com.seckill.inventory.InventoryApplication;
@@ -33,7 +33,6 @@ import static org.awaitility.Awaitility.await;
  * S-01/S-02/S-03：服务异常故障演练（order/inventory 下线后 MQ 续跑，payment 下线后回调恢复）。
  */
 @Tag("chaos")
-@Tag("integration")
 class ServiceFaultDrillIT extends IntegrationTestBase {
 
     private static final long SESSION_ID = 35001L;

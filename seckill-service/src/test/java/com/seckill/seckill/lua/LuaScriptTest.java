@@ -11,6 +11,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Lua 脚本静态语义测试（G-11，冻结契约）：
  * 仅验证脚本资源契约，Lua 原子性并发验证属于 Phase 5.3/5.5。
  */
+@org.junit.jupiter.api.Tag("unit")
 class LuaScriptTest {
 
     private static String load(String location) throws Exception {

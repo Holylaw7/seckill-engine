@@ -33,6 +33,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
+@org.junit.jupiter.api.Tag("unit")
 class InventoryServiceImplTest {
 
     @Mock

@@ -18,6 +18,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+@org.junit.jupiter.api.Tag("unit")
 class BlacklistGlobalFilterTest {
 
     @Test

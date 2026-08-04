@@ -1,4 +1,4 @@
-package com.seckill.integration;
+package com.seckill.integration.integration;
 
 import com.seckill.auth.AuthApplication;
 import com.seckill.auth.dto.LoginRequest;

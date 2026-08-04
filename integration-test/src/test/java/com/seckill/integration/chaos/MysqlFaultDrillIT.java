@@ -1,4 +1,4 @@
-package com.seckill.integration;
+package com.seckill.integration.chaos;
 
 import com.seckill.common.result.Result;
 import com.seckill.inventory.InventoryApplication;
@@ -28,7 +28,6 @@ import static org.awaitility.Awaitility.await;
  * 独立运行（M-01 停/启共享 MySQL 容器）。
  */
 @Tag("chaos")
-@Tag("integration")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class MysqlFaultDrillIT extends IntegrationTestBase {
 
