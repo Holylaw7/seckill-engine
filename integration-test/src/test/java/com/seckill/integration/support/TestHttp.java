@@ -5,6 +5,7 @@ import com.seckill.common.util.JsonUtils;
 import com.seckill.auth.dto.LoginRequest;
 import com.seckill.auth.dto.LoginResponse;
 import com.seckill.inventory.dto.ReconcileReport;
+import com.seckill.order.dto.OrderDetailResponse;
 import com.seckill.payment.dto.CreatePayRequest;
 import com.seckill.payment.dto.CreatePayResponse;
 import com.seckill.seckill.dto.ExecuteRequest;
@@ -14,13 +15,16 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.client.ClientHttpResponse;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.ResponseErrorHandler;
 import org.springframework.web.client.RestTemplate;
 
+import java.net.http.HttpClient;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import java.time.Duration;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.HexFormat;
@@ -33,10 +37,18 @@ import java.util.Map;
 public final class TestHttp {
 
     private static final String HMAC_ALGORITHM = "HmacSHA256";
-    private static final RestTemplate REST = new RestTemplate();
-    private static final RestTemplate CALLBACK_REST = new RestTemplate();
+    private static final RestTemplate REST;
+    private static final RestTemplate CALLBACK_REST;
 
     static {
+        // JDK HttpClient 连接复用（keep-alive），避免压测下临时端口耗尽
+        HttpClient httpClient = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(10))
+                .build();
+        JdkClientHttpRequestFactory restFactory = new JdkClientHttpRequestFactory(httpClient);
+        restFactory.setReadTimeout(Duration.ofSeconds(15));
+        REST = new RestTemplate(restFactory);
+        CALLBACK_REST = new RestTemplate(restFactory);
         // 回调接口以 HTTP 4xx 表达业务拒绝，客户端需要拿到状态码而非抛异常
         CALLBACK_REST.setErrorHandler(new ResponseErrorHandler() {
             @Override
@@ -83,6 +95,14 @@ public final class TestHttp {
         return REST.exchange(baseUrl + "/api/v1/auth/login", HttpMethod.POST,
                 new HttpEntity<>(new LoginRequest(username, password), headers),
                 new ParameterizedTypeReference<Result<LoginResponse>>() {
+                }).getBody();
+    }
+
+    public static Result<OrderDetailResponse> getOrder(String baseUrl, long userId,
+                                                       String orderId, String traceId) {
+        return REST.exchange(baseUrl + "/api/v1/orders/" + orderId, HttpMethod.GET,
+                new HttpEntity<>(null, headers(userId, traceId)),
+                new ParameterizedTypeReference<Result<OrderDetailResponse>>() {
                 }).getBody();
     }
 
