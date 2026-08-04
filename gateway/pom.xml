@@ -40,21 +40,22 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-redis-reactive</artifactId>
         </dependency>
-        <!-- SCG 4.1.2 JsonToGRPC/GrpcSslConfigurer 依赖（server POM 中 optional，starter 不传递） -->
+        <!-- SCG 4.1.2 JsonToGRPC/GrpcSslConfigurer 依赖（server POM 中 optional，starter 不传递；
+             GrpcSslConfigurer 引用 ForwardingChannelBuilder2，需 grpc >= 1.66，取 1.69.0） -->
         <dependency>
             <groupId>io.grpc</groupId>
             <artifactId>grpc-netty</artifactId>
-            <version>1.62.2</version>
+            <version>1.69.0</version>
         </dependency>
         <dependency>
             <groupId>io.grpc</groupId>
             <artifactId>grpc-protobuf</artifactId>
-            <version>1.62.2</version>
+            <version>1.69.0</version>
         </dependency>
         <dependency>
             <groupId>io.grpc</groupId>
             <artifactId>grpc-stub</artifactId>
-            <version>1.62.2</version>
+            <version>1.69.0</version>
         </dependency>
         <!-- Lombok（编译期） -->
         <dependency>
