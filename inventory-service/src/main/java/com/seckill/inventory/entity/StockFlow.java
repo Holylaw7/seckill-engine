@@ -38,5 +38,8 @@ public class StockFlow {
 
     private String remark;
 
+    /** 命中桶号（Phase 6.2；NULL=单桶/旧路径；仅定位，不参与 uk_biz 幂等） */
+    private Integer bucketNo;
+
     private LocalDateTime createdAt;
 }

@@ -9,6 +9,8 @@ import com.seckill.inventory.dto.CreateOrderMessage;
 import com.seckill.inventory.entity.Inventory;
 import com.seckill.inventory.entity.StockFlow;
 import com.seckill.inventory.mapper.InventoryMapper;
+import com.seckill.inventory.config.InventoryShardingProperties;
+import com.seckill.inventory.service.InventoryBucketService;
 import com.seckill.inventory.service.InventoryService;
 import com.seckill.inventory.service.StockFlowService;
 import lombok.RequiredArgsConstructor;
@@ -21,10 +23,19 @@ public class InventoryServiceImpl implements InventoryService {
 
     private final InventoryMapper inventoryMapper;
     private final StockFlowService stockFlowService;
+    private final InventoryBucketService inventoryBucketService;
+    private final InventoryShardingProperties shardingProperties;
 
     @Override
     @Transactional
     public boolean confirmDeduct(CreateOrderMessage message) {
+        if (shardingProperties.isEnabled()) {
+            return inventoryBucketService.deduct(message);
+        }
+        return confirmDeductLegacy(message);
+    }
+
+    private boolean confirmDeductLegacy(CreateOrderMessage message) {
         String orderId = message.getOrderId();
         if (stockFlowService.existsByBiz(InventoryConstants.BIZ_TYPE_ORDER, orderId)) {
             return false;
@@ -62,6 +73,13 @@ public class InventoryServiceImpl implements InventoryService {
     @Override
     @Transactional
     public String recoverStock(String orderId, Long skuId, int quantity, String bizType) {
+        if (shardingProperties.isEnabled()) {
+            return inventoryBucketService.recover(orderId, skuId, quantity, bizType);
+        }
+        return recoverStockLegacy(orderId, skuId, quantity, bizType);
+    }
+
+    private String recoverStockLegacy(String orderId, Long skuId, int quantity, String bizType) {
         if (quantity <= 0) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "回补数量必须大于0");
         }
@@ -94,5 +112,12 @@ public class InventoryServiceImpl implements InventoryService {
             }
         }
         throw new BusinessException(ErrorCode.INVENTORY_ERROR, "库存更新冲突，请对账");
+    }
+
+    @Override
+    public Integer findDeductBucketNo(String orderId) {
+        com.seckill.inventory.entity.StockFlow flow =
+                stockFlowService.findByBiz(InventoryConstants.BIZ_TYPE_ORDER, orderId);
+        return flow == null ? null : flow.getBucketNo();
     }
 }

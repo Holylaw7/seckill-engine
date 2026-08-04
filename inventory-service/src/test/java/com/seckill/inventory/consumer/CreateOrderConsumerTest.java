@@ -31,7 +31,7 @@ class CreateOrderConsumerTest {
     @Test
     void onMessageShouldConfirmDeduct() {
         CreateOrderMessage message = new CreateOrderMessage(
-                "msg-001", 10001L, 20001L, 30001L, "SO123", 1000L, 1, null);
+            "msg-001", 10001L, 20001L, 30001L, "SO123", 1000L, 1, null, null);
         newConsumer().onMessage(JsonUtils.toJson(message));
 
         ArgumentCaptor<CreateOrderMessage> captor = ArgumentCaptor.forClass(CreateOrderMessage.class);
@@ -44,7 +44,7 @@ class CreateOrderConsumerTest {
         doThrow(new BusinessException(ErrorCode.INVENTORY_ERROR, "事实库存不足"))
                 .when(inventoryService).confirmDeduct(any());
         CreateOrderMessage message = new CreateOrderMessage(
-                "msg-001", 10001L, 20001L, 30001L, "SO123", 1000L, 1, null);
+            "msg-001", 10001L, 20001L, 30001L, "SO123", 1000L, 1, null, null);
         newConsumer().onMessage(JsonUtils.toJson(message));
     }
 
@@ -52,7 +52,7 @@ class CreateOrderConsumerTest {
     void runtimeErrorShouldPropagateForRetry() {
         doThrow(new RuntimeException("db down")).when(inventoryService).confirmDeduct(any());
         CreateOrderMessage message = new CreateOrderMessage(
-                "msg-001", 10001L, 20001L, 30001L, "SO123", 1000L, 1, null);
+            "msg-001", 10001L, 20001L, 30001L, "SO123", 1000L, 1, null, null);
         assertThrows(RuntimeException.class,
                 () -> newConsumer().onMessage(JsonUtils.toJson(message)));
     }

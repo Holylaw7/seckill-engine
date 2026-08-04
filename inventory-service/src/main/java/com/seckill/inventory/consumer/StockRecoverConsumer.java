@@ -35,9 +35,10 @@ public class StockRecoverConsumer implements RocketMQListener<String> {
 
         String flowNo = inventoryService.recoverStock(
                 message.getOrderId(), message.getSkuId(), quantity, bizType);
+        Integer bucketNo = inventoryService.findDeductBucketNo(message.getOrderId());
 
         boolean recovered = recoverClient.recover(new RecoverRequest(
-                flowNo, message.getSkuId(), message.getSessionId(), quantity));
+                flowNo, message.getSkuId(), message.getSessionId(), quantity, bucketNo));
         if (!recovered) {
             // 冻结策略：MySQL 成功优先，Redis 失败进入告警 + repair 流程
             log.error("redis recover failed, orderId={}, flowNo={}, skuId={} -> repair flow",

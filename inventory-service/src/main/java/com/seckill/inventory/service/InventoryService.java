@@ -20,4 +20,9 @@ public interface InventoryService {
      * @return 流水号（= Redis 回补接口 requestId）
      */
     String recoverStock(String orderId, Long skuId, int quantity, String bizType);
+
+    /**
+     * 查询 DEDUCT 流水命中的桶号（分桶恢复定位；单桶/旧路径返回 null）。
+     */
+    Integer findDeductBucketNo(String orderId);
 }

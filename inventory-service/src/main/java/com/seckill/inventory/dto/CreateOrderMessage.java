@@ -27,4 +27,7 @@ public class CreateOrderMessage {
     private Integer quantity;
 
     private String traceId;
+
+    /** 命中桶号（Phase 6.2 可选；NULL=旧消息，回退单桶/路由） */
+    private Integer bucketNo;
 }

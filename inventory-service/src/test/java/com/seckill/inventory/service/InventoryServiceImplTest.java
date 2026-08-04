@@ -8,6 +8,7 @@ import com.seckill.inventory.constant.InventoryConstants;
 import com.seckill.inventory.dto.CreateOrderMessage;
 import com.seckill.inventory.entity.Inventory;
 import com.seckill.inventory.entity.StockFlow;
+import com.seckill.inventory.config.InventoryShardingProperties;
 import com.seckill.inventory.mapper.InventoryMapper;
 import com.seckill.inventory.service.impl.InventoryServiceImpl;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
@@ -40,9 +41,14 @@ class InventoryServiceImplTest {
     private InventoryMapper inventoryMapper;
     @Mock
     private StockFlowService stockFlowService;
+    @Mock
+    private InventoryBucketService inventoryBucketService;
 
     private InventoryServiceImpl newService() {
-        return new InventoryServiceImpl(inventoryMapper, stockFlowService);
+        InventoryShardingProperties properties = new InventoryShardingProperties();
+        properties.setEnabled(false);
+        properties.setBucketCount(1);
+        return new InventoryServiceImpl(inventoryMapper, stockFlowService, inventoryBucketService, properties);
     }
 
     @BeforeAll
@@ -54,7 +60,7 @@ class InventoryServiceImplTest {
 
     private CreateOrderMessage message() {
         return new CreateOrderMessage(
-                "msg-001", 10001L, 20001L, 30001L, "SO123", 1000L, 1, null);
+            "msg-001", 10001L, 20001L, 30001L, "SO123", 1000L, 1, null, null);
     }
 
     private Inventory inventory(int available, int locked, int version) {

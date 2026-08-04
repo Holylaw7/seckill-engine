@@ -30,6 +30,16 @@ public class StockFlowService {
      */
     public String createFlow(String changeType, String bizType, String bizId, Long skuId,
                              int changeQty, int beforeQty, int afterQty, Long operatorId, String remark) {
+        return createFlow(changeType, bizType, bizId, skuId, changeQty, beforeQty, afterQty,
+                operatorId, remark, null);
+    }
+
+    /**
+     * 创建流水（uk_biz 幂等：重复返回既有 flowNo；bucketNo 仅定位）。
+     */
+    public String createFlow(String changeType, String bizType, String bizId, Long skuId,
+                             int changeQty, int beforeQty, int afterQty, Long operatorId,
+                             String remark, Integer bucketNo) {
         StockFlow existing = findByBiz(bizType, bizId);
         if (existing != null) {
             return existing.getFlowNo();
@@ -47,6 +57,7 @@ public class StockFlowService {
         flow.setBizId(bizId);
         flow.setOperatorId(operatorId);
         flow.setRemark(remark);
+        flow.setBucketNo(bucketNo);
         try {
             stockFlowMapper.insert(flow);
         } catch (DuplicateKeyException e) {

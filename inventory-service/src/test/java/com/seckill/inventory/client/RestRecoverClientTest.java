@@ -34,7 +34,7 @@ class RestRecoverClientTest {
                         "{\"code\":0,\"message\":\"success\",\"data\":null,\"timestamp\":1,\"traceId\":null}",
                         MediaType.APPLICATION_JSON));
 
-        assertTrue(client.recover(new RecoverRequest("SF1", 20001L, 30001L, 1)));
+        assertTrue(client.recover(new RecoverRequest("SF1", 20001L, 30001L, 1, null)));
         server.verify();
     }
 
@@ -50,6 +50,6 @@ class RestRecoverClientTest {
                 .andExpect(method(HttpMethod.POST))
                 .andRespond(withServerError());
 
-        assertFalse(client.recover(new RecoverRequest("SF1", 20001L, 30001L, 1)));
+        assertFalse(client.recover(new RecoverRequest("SF1", 20001L, 30001L, 1, null)));
     }
 }
