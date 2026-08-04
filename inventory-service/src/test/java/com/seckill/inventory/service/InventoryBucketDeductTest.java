@@ -77,6 +77,17 @@ class InventoryBucketDeductTest {
         assertTrue(service.deduct(message(null)));
     }
 
+    @Test
+    void concurrentDuplicateShouldReturnFalseAfterRowLock() {
+        when(stockFlowService.existsByBiz("ORDER", "SO123")).thenReturn(false, true);
+        when(bucketMapper.selectBySkuAndBucketForUpdate(20001L, 1))
+                .thenReturn(bucket(1, 100, 0, 0));
+
+        org.junit.jupiter.api.Assertions.assertFalse(service.deduct(message(1)));
+        verify(bucketMapper, org.mockito.Mockito.never()).update(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any());
+    }
+
     private static InventoryBucket bucket(int bucketNo, int total, int locked, int version) {
         InventoryBucket bucket = new InventoryBucket();
         bucket.setSkuId(20001L);

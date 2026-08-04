@@ -44,6 +44,10 @@ public class InventoryBucketService {
             if (bucket == null) {
                 throw new BusinessException(ErrorCode.INVENTORY_ERROR, "库存桶不存在");
             }
+            // 幂等重查（持有行锁后）：并发重复消息在此被串行化，防止二次扣减
+            if (stockFlowService.existsByBiz(InventoryConstants.BIZ_TYPE_ORDER, orderId)) {
+                return false;
+            }
             if (bucket.getAvailableStock() < quantity) {
                 throw new BusinessException(ErrorCode.INVENTORY_ERROR, "桶内事实库存不足");
             }
@@ -87,6 +91,11 @@ public class InventoryBucketService {
             InventoryBucket bucket = bucketMapper.selectBySkuAndBucketForUpdate(skuId, bucketNo);
             if (bucket == null) {
                 throw new BusinessException(ErrorCode.INVENTORY_ERROR, "库存桶不存在");
+            }
+            // 幂等重查（持有行锁后）：并发重复恢复消息只生效一次
+            StockFlow duplicate = stockFlowService.findByBiz(bizType, orderId);
+            if (duplicate != null) {
+                return duplicate.getFlowNo();
             }
             if (bucket.getLockedStock() < quantity) {
                 throw new BusinessException(ErrorCode.INVENTORY_ERROR, "无可回补的锁定库存");

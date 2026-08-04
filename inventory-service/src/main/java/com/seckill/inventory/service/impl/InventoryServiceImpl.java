@@ -48,6 +48,10 @@ public class InventoryServiceImpl implements InventoryService {
             if (inventory == null) {
                 throw new BusinessException(ErrorCode.INVENTORY_ERROR, "库存事实不存在");
             }
+            // 幂等重查（持有行锁后）：并发重复消息只扣减一次
+            if (stockFlowService.existsByBiz(InventoryConstants.BIZ_TYPE_ORDER, orderId)) {
+                return false;
+            }
             if (inventory.getAvailableStock() < quantity) {
                 throw new BusinessException(ErrorCode.INVENTORY_ERROR, "事实库存不足");
             }
@@ -93,6 +97,11 @@ public class InventoryServiceImpl implements InventoryService {
                     .last("FOR UPDATE"));
             if (inventory == null) {
                 throw new BusinessException(ErrorCode.INVENTORY_ERROR, "库存事实不存在");
+            }
+            // 幂等重查（持有行锁后）：并发重复恢复只生效一次
+            StockFlow duplicate = stockFlowService.findByBiz(bizType, orderId);
+            if (duplicate != null) {
+                return duplicate.getFlowNo();
             }
             if (inventory.getLockedStock() < quantity) {
                 throw new BusinessException(ErrorCode.INVENTORY_ERROR, "无可回补的锁定库存");
