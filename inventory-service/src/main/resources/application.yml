@@ -35,3 +35,9 @@ seckill:
       # seckill-service 内部回补接口（契约冻结：requestId=stock_flow.flow_no，幂等）
       base-url: http://localhost:8082
       path: /api/v1/seckill/internal/stocks/recover
+
+# Phase 6.2 库存分桶（默认关闭且桶数=1，行为等价旧系统）
+inventory:
+  sharding:
+    enabled: false
+    bucket-count: 1
