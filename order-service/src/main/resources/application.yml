@@ -26,6 +26,10 @@ mybatis-plus:
       logic-not-delete-value: 0
 
 seckill:
+  mq:
+    consumer:
+      # Phase 6.1 调优：16 消费线程（基线 20；实测 order 链路 269 QPS）
+      threads: 16
   order:
     worker-id: 4
     pay-deadline-minutes: 15
