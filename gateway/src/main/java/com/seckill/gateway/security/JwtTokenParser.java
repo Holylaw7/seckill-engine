@@ -7,8 +7,11 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * JWT 基础解析（HS256）：解析 + HMAC 验签 + 过期校验，提取 userId。
@@ -19,6 +22,15 @@ public final class JwtTokenParser {
 
     private static final Base64.Encoder URL_ENCODER = Base64.getUrlEncoder().withoutPadding();
     private static final Base64.Decoder URL_DECODER = Base64.getUrlDecoder();
+    /** Phase 6.3：复用 Mac 实例与 Key 对象（仅解析器缓存，禁止缓存 claims/权限/秒杀资格） */
+    private static final ThreadLocal<Mac> MAC_CACHE = ThreadLocal.withInitial(() -> {
+        try {
+            return Mac.getInstance(ALGORITHM);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("HmacSHA256 unavailable", e);
+        }
+    });
+    private static final Map<String, SecretKeySpec> KEY_CACHE = new ConcurrentHashMap<>();
 
     private JwtTokenParser() {
     }
@@ -57,8 +69,9 @@ public final class JwtTokenParser {
     }
 
     private static byte[] hmacSha256(String data, String secret) throws Exception {
-        Mac mac = Mac.getInstance(ALGORITHM);
-        mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), ALGORITHM));
+        Mac mac = MAC_CACHE.get();
+        mac.init(KEY_CACHE.computeIfAbsent(secret,
+                value -> new SecretKeySpec(value.getBytes(StandardCharsets.UTF_8), ALGORITHM)));
         return mac.doFinal(data.getBytes(StandardCharsets.UTF_8));
     }
 
