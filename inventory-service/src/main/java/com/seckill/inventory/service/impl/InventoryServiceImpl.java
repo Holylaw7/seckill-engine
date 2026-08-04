@@ -71,7 +71,8 @@ public class InventoryServiceImpl implements InventoryService {
         }
         for (int attempt = 0; attempt < InventoryConstants.CAS_MAX_RETRY; attempt++) {
             Inventory inventory = inventoryMapper.selectOne(new LambdaQueryWrapper<Inventory>()
-                    .eq(Inventory::getSkuId, skuId));
+                    .eq(Inventory::getSkuId, skuId)
+                    .last("FOR UPDATE"));
             if (inventory == null) {
                 throw new BusinessException(ErrorCode.INVENTORY_ERROR, "库存事实不存在");
             }
