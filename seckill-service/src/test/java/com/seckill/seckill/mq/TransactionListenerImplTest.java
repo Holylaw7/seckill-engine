@@ -94,4 +94,25 @@ class TransactionListenerImplTest {
         when(preDeductService.findTxStatus("msg-001")).thenReturn(null);
         assertEquals(RocketMQLocalTransactionState.UNKNOWN, listener.checkLocalTransaction(message()));
     }
+
+    @Test
+    void localTransactionShouldAcceptByteArrayPayload() {
+        SeckillOrderMessage payload = new SeckillOrderMessage(
+                "msg-002", 10001L, 20001L, 30001L, "124", 1000L, 1, null, 9900L);
+        Message<byte[]> binaryMessage = MessageBuilder
+                .withPayload(JsonUtils.toJson(payload).getBytes(java.nio.charset.StandardCharsets.UTF_8))
+                .build();
+
+        RocketMQLocalTransactionState state = listener.executeLocalTransaction(binaryMessage, null);
+        assertEquals(RocketMQLocalTransactionState.COMMIT, state);
+        verify(preDeductService).markTxSuccess("msg-002");
+    }
+
+    @Test
+    void duplicateWithUnknownStatusShouldCommit() {
+        doThrow(new DuplicateKeyException("dup")).when(preDeductService).createInitial(any());
+        when(preDeductService.findTxStatus("msg-001")).thenReturn(null);
+        assertEquals(RocketMQLocalTransactionState.COMMIT,
+                listener.executeLocalTransaction(message(), null));
+    }
 }

@@ -116,4 +116,22 @@ class PreDeductServiceTest {
         newService().markRecovered("msg-001");
         verify(preDeductMapper).update(isNull(), any());
     }
+
+    @Test
+    void markTxSuccessShouldUpdateStatus() {
+        newService().markTxSuccess("msg-001");
+        verify(preDeductMapper).update(isNull(), any());
+    }
+
+    @Test
+    void findLatestShouldReturnRowForNamespace() {
+        SeckillPreDeduct row = new SeckillPreDeduct();
+        row.setOrderId("SO123");
+        row.setDeductStatus("CONFIRMED");
+        when(preDeductMapper.selectOne(any())).thenReturn(row);
+
+        SeckillPreDeduct result = newService().findLatestByUserSessionSku(10001L, 30001L, 20001L);
+        assertEquals("SO123", result.getOrderId());
+        assertEquals("CONFIRMED", result.getDeductStatus());
+    }
 }
