@@ -18,6 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -41,7 +42,7 @@ class TransactionListenerImplTest {
 
     private Message<String> message() {
         SeckillOrderMessage payload = new SeckillOrderMessage(
-                "msg-001", 10001L, 20001L, 30001L, "123", 1000L, 1, null, 9900L);
+              "msg-001", 10001L, 20001L, 30001L, "123", 1000L, 1, null, 9900L, null);
         return MessageBuilder.withPayload(JsonUtils.toJson(payload)).build();
     }
 
@@ -61,7 +62,7 @@ class TransactionListenerImplTest {
         assertEquals(RocketMQLocalTransactionState.ROLLBACK, state);
         verify(preDeductService).markTxFail("msg-001");
         verify(preDeductService).markRecovered("msg-001");
-        verify(stockService).recover(eq("20001"), eq("10001"), eq(1), eq(true));
+        verify(stockService).recoverBucket(eq("20001"), eq("10001"), eq(1), eq(true), isNull());
     }
 
     @Test
@@ -98,7 +99,7 @@ class TransactionListenerImplTest {
     @Test
     void localTransactionShouldAcceptByteArrayPayload() {
         SeckillOrderMessage payload = new SeckillOrderMessage(
-                "msg-002", 10001L, 20001L, 30001L, "124", 1000L, 1, null, 9900L);
+               "msg-002", 10001L, 20001L, 30001L, "124", 1000L, 1, null, 9900L, null);
         Message<byte[]> binaryMessage = MessageBuilder
                 .withPayload(JsonUtils.toJson(payload).getBytes(java.nio.charset.StandardCharsets.UTF_8))
                 .build();

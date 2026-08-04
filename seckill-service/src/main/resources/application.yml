@@ -38,3 +38,9 @@ seckill:
       enabled: true
       base-url: http://localhost:8081
       fail-open: true
+
+# Phase 6.2 库存分桶（默认关闭且桶数=1，行为等价旧系统）
+inventory:
+  sharding:
+    enabled: false
+    bucket-count: 1

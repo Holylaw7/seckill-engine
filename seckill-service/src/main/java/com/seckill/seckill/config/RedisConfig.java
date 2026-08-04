@@ -23,4 +23,20 @@ public class RedisConfig {
         script.setResultType(Long.class);
         return script;
     }
+
+    @Bean("seckillDeductBucketScript")
+    public DefaultRedisScript<String> seckillDeductBucketScript() {
+        DefaultRedisScript<String> script = new DefaultRedisScript<>();
+        script.setLocation(new ClassPathResource("lua/seckill_deduct_v2.lua"));
+        script.setResultType(String.class);
+        return script;
+    }
+
+    @Bean("seckillRecoverBucketScript")
+    public DefaultRedisScript<String> seckillRecoverBucketScript() {
+        DefaultRedisScript<String> script = new DefaultRedisScript<>();
+        script.setLocation(new ClassPathResource("lua/seckill_recover_v2.lua"));
+        script.setResultType(String.class);
+        return script;
+    }
 }

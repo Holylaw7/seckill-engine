@@ -46,8 +46,9 @@ public class StockRecoverInternalController {
             return Result.success();
         }
         try {
-            StockRecoverResult result = stockService.recover(
-                    String.valueOf(request.getSkuId()), "0", request.getRecoverCount(), false);
+            StockRecoverResult result = stockService.recoverBucket(
+                    String.valueOf(request.getSkuId()), "0", request.getRecoverCount(), false,
+                    request.getBucketNo());
             if (result != StockRecoverResult.SUCCESS) {
                 log.warn("internal stock recover failed, requestId={}, skuId={}, result={}",
                         request.getRequestId(), request.getSkuId(), result);

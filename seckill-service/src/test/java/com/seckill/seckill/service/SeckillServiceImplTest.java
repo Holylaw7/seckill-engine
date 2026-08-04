@@ -4,6 +4,7 @@ import com.seckill.common.error.ErrorCode;
 import com.seckill.common.exception.BusinessException;
 import com.seckill.common.id.SnowflakeIdGenerator;
 import com.seckill.seckill.config.SeckillProperties;
+import com.seckill.seckill.config.SeckillShardingProperties;
 import com.seckill.seckill.dto.ExecuteRequest;
 import com.seckill.seckill.dto.ExecuteResponse;
 import com.seckill.seckill.dto.SeckillOrderMessage;
@@ -29,6 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -60,7 +62,7 @@ class SeckillServiceImplTest {
         properties.setFlowKeyTtlSeconds(86400L);
         seckillService = new SeckillServiceImpl(
                 sessionCacheService, stockService, skuMapper, mqProducer, riskCheckClient,
-                snowflakeIdGenerator, properties);
+                snowflakeIdGenerator, properties, new SeckillShardingProperties());
     }
 
     private void mockSku() {
@@ -208,7 +210,7 @@ class SeckillServiceImplTest {
         BusinessException e = assertThrows(BusinessException.class,
                 () -> seckillService.execute(10001L, "127.0.0.1", request()));
         assertEquals(30006, e.getErrorCode().getCode());
-        verify(stockService).recover(eq("20001"), eq("10001"), eq(1), eq(true));
+        verify(stockService).recoverBucket(eq("20001"), eq("10001"), eq(1), eq(true), isNull());
     }
 
     @Test

@@ -53,8 +53,9 @@ public class TransactionListenerImpl implements RocketMQLocalTransactionListener
             } catch (Exception ignored) {
                 // 补偿动作失败由对账兜底
             }
-            stockService.recover(String.valueOf(message.getSkuId()),
-                    String.valueOf(message.getUserId()), message.getQuantity(), true);
+            stockService.recoverBucket(String.valueOf(message.getSkuId()),
+                    String.valueOf(message.getUserId()), message.getQuantity(), true,
+                    message.getBucketNo());
             return RocketMQLocalTransactionState.ROLLBACK;
         }
     }

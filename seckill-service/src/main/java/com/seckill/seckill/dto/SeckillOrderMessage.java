@@ -30,4 +30,7 @@ public class SeckillOrderMessage {
 
     /** 金额快照（单位：分，冻结：order-service 建单依据，禁止客户端传入） */
     private Long amount;
+
+    /** 命中桶号（Phase 6.2 可选；NULL=旧准入路径） */
+    private Integer bucketNo;
 }

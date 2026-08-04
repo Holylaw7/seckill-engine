@@ -58,7 +58,8 @@ class StockRecoverInternalControllerTest {
     @Test
     void recover_should_return_success() throws Exception {
         when(valueOperations.setIfAbsent(anyString(), anyString(), any(Duration.class))).thenReturn(true);
-        when(stockService.recover(anyString(), anyString(), any(Integer.class), any(Boolean.class)))
+        when(stockService.recoverBucket(anyString(), anyString(), any(Integer.class),
+                any(Boolean.class), org.mockito.ArgumentMatchers.nullable(Integer.class)))
                 .thenReturn(StockRecoverResult.SUCCESS);
 
         mockMvc.perform(post("/api/v1/seckill/internal/stocks/recover")
@@ -66,7 +67,7 @@ class StockRecoverInternalControllerTest {
                         .content(body()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0));
-        verify(stockService).recover("20001", "0", 1, false);
+        verify(stockService).recoverBucket("20001", "0", 1, false, null);
     }
 
     @Test
@@ -78,13 +79,15 @@ class StockRecoverInternalControllerTest {
                         .content(body()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0));
-        verify(stockService, never()).recover(anyString(), anyString(), any(Integer.class), any(Boolean.class));
+        verify(stockService, never()).recoverBucket(anyString(), anyString(), any(Integer.class),
+                any(Boolean.class), org.mockito.ArgumentMatchers.nullable(Integer.class));
     }
 
     @Test
     void recover_should_fail_when_redis_recover_not_ready() throws Exception {
         when(valueOperations.setIfAbsent(anyString(), anyString(), any(Duration.class))).thenReturn(true);
-        when(stockService.recover(anyString(), anyString(), any(Integer.class), any(Boolean.class)))
+        when(stockService.recoverBucket(anyString(), anyString(), any(Integer.class),
+                any(Boolean.class), org.mockito.ArgumentMatchers.nullable(Integer.class)))
                 .thenReturn(StockRecoverResult.NOT_READY);
 
         mockMvc.perform(post("/api/v1/seckill/internal/stocks/recover")

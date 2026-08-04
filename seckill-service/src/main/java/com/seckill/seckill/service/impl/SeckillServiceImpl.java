@@ -5,6 +5,7 @@ import com.seckill.common.error.ErrorCode;
 import com.seckill.common.exception.BusinessException;
 import com.seckill.common.id.SnowflakeIdGenerator;
 import com.seckill.seckill.config.SeckillProperties;
+import com.seckill.seckill.config.SeckillShardingProperties;
 import com.seckill.seckill.constant.SeckillConstants;
 import com.seckill.seckill.dto.ExecuteRequest;
 import com.seckill.seckill.dto.ExecuteResponse;
@@ -14,6 +15,7 @@ import com.seckill.seckill.entity.SeckillSku;
 import com.seckill.seckill.mapper.SeckillSkuMapper;
 import com.seckill.seckill.mq.RocketMqProducer;
 import com.seckill.seckill.redis.StockDeductResult;
+import com.seckill.seckill.redis.BucketDeductResult;
 import com.seckill.seckill.redis.StockService;
 import com.seckill.seckill.risk.RiskCheckClient;
 import com.seckill.seckill.service.SessionCacheService;
@@ -36,6 +38,7 @@ public class SeckillServiceImpl implements SeckillService {
     private final RiskCheckClient riskCheckClient;
     private final SnowflakeIdGenerator snowflakeIdGenerator;
     private final SeckillProperties properties;
+    private final SeckillShardingProperties shardingProperties;
 
     @Override
     public ExecuteResponse execute(Long userId, String ip, ExecuteRequest request) {
@@ -66,9 +69,19 @@ public class SeckillServiceImpl implements SeckillService {
 
         long userKeyTtlSeconds = Math.max(1L,
                 (session.endTime() + SeckillConstants.USER_MARK_EXTRA_MILLIS - now) / 1000);
-        StockDeductResult deduct = stockService.preDeduct(
-                String.valueOf(request.getSkuId()), String.valueOf(userId),
-                request.getQuantity(), userKeyTtlSeconds);
+        String skuId = String.valueOf(request.getSkuId());
+        String userIdStr = String.valueOf(userId);
+        StockDeductResult deduct;
+        Integer bucketNo = null;
+        if (shardingProperties.isEnabled()) {
+            BucketDeductResult bucketResult = stockService.preDeductBucket(
+                    skuId, userIdStr, request.getQuantity(), userKeyTtlSeconds,
+                    shardingProperties.getBucketCount(), 7 * 24 * 3600L);
+            deduct = bucketResult.result();
+            bucketNo = bucketResult.bucketNo();
+        } else {
+            deduct = stockService.preDeduct(skuId, userIdStr, request.getQuantity(), userKeyTtlSeconds);
+        }
         if (deduct != StockDeductResult.SUCCESS) {
             throw mapDeductError(deduct);
         }
@@ -77,13 +90,12 @@ public class SeckillServiceImpl implements SeckillService {
         SeckillOrderMessage message = new SeckillOrderMessage(
                 UUID.randomUUID().toString().replace("-", ""),
                 userId, request.getSkuId(), request.getSessionId(),
-                String.valueOf(orderId), now, request.getQuantity(), null, amountFen);
+                String.valueOf(orderId), now, request.getQuantity(), null, amountFen, bucketNo);
         try {
             mqProducer.sendCreateOrder(message);
         } catch (BusinessException e) {
             // 发送失败：回补库存，禁止重试预扣
-            stockService.recover(String.valueOf(request.getSkuId()),
-                    String.valueOf(userId), request.getQuantity(), true);
+            stockService.recoverBucket(skuId, userIdStr, request.getQuantity(), true, bucketNo);
             throw new BusinessException(ErrorCode.SECKILL_BUSY, "系统繁忙，请稍后重试");
         }
 

@@ -36,7 +36,10 @@ class RedisStockServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new RedisStockService(deductScript, recoverScript, redisTemplate);
+        service = new RedisStockService(deductScript, recoverScript,
+                new org.springframework.data.redis.core.script.DefaultRedisScript<String>(),
+                new org.springframework.data.redis.core.script.DefaultRedisScript<String>(),
+                redisTemplate);
     }
 
     @Test

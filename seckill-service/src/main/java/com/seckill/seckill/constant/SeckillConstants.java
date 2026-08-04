@@ -8,6 +8,8 @@ public final class SeckillConstants {
     public static final String SESSION_PREFIX = "seckill:session:";
     public static final String STOCK_PREFIX = "seckill:stock:";
     public static final String STOCK_TOTAL_PREFIX = "seckill:stock:total:";
+    public static final String STOCK_BUCKET_PREFIX = "seckill:stock:bucket:";
+    public static final String STOCK_RR_PREFIX = "seckill:stock:rr:";
     public static final String USER_PREFIX = "seckill:user:";
     public static final String FLOW_PREFIX = "seckill:flow:";
     public static final String LOCK_PREHEAT_PREFIX = "seckill:lock:preheat:";

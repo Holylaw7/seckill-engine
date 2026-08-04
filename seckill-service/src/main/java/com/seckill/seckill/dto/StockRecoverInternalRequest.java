@@ -25,4 +25,7 @@ public class StockRecoverInternalRequest {
     @NotNull(message = "recoverCount不能为空")
     @Min(value = 1, message = "recoverCount必须大于0")
     private Integer recoverCount;
+
+    /** 命中桶号（Phase 6.2 可选；NULL=单桶/旧路径，按 SKU 全局回补） */
+    private Integer bucketNo;
 }
