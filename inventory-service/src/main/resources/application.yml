@@ -25,6 +25,10 @@ mybatis-plus:
       logic-not-delete-value: 0
 
 seckill:
+  mq:
+    consumer:
+      # Phase 6.1 调优：8 消费线程（基线 20；单 SKU 行锁场景 4/8/20 持平，8 最优且线程开销最小）
+      threads: 8
   inventory:
     worker-id: 3
     recover:
