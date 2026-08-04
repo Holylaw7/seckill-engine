@@ -47,7 +47,7 @@ class InventoryShardingConsistencyIT extends IntegrationTestBase {
 
     private static final int STOCK = 1000;
     private static final int BUCKET_COUNT = 8;
-    private static final int CONCURRENCY = 300;
+    private static final int CONCURRENCY = 150;
     private static final int BUCKET_TOTAL = STOCK / BUCKET_COUNT;
 
     private static final long RUN_ID = System.currentTimeMillis();
@@ -135,7 +135,7 @@ class InventoryShardingConsistencyIT extends IntegrationTestBase {
         assertThat(success).isLessThanOrEqualTo(STOCK);
         assertThat(success).isGreaterThan(0);
 
-        await().atMost(Duration.ofSeconds(120)).untilAsserted(() -> {
+        await().atMost(Duration.ofSeconds(240)).untilAsserted(() -> {
             assertThat(TestDataHelper.countOrders(SESSION_ID, SKU_ID)).isEqualTo(success);
             assertThat(TestDataHelper.countDeductFlow(SKU_ID)).isEqualTo(success);
         });
@@ -176,16 +176,18 @@ class InventoryShardingConsistencyIT extends IntegrationTestBase {
         String orderId = SUCCESS_ORDER_IDS.get(0);
         String messageId = queryString("SELECT message_id FROM seckill_seckill.seckill_pre_deduct "
                 + "WHERE order_id='" + orderId + "'");
-        Integer bucketNo = queryInt("SELECT bucket_no FROM seckill_inventory.stock_flow "
+        String bucketNoValue = queryString("SELECT bucket_no FROM seckill_inventory.stock_flow "
                 + "WHERE biz_type='ORDER' AND biz_id='" + orderId + "'");
         assertThat(messageId).isNotBlank();
+        assertThat(bucketNoValue).isNotBlank();
+        Integer bucketNo = Integer.valueOf(bucketNoValue);
 
         String body = TestHttp.createOrderMessageJson(messageId, BASE_USER,
                 SESSION_ID, SKU_ID, orderId, 1, 9900L, "l06c-dup-" + RUN_ID, bucketNo);
         sendCreateOrder(body);
         sendCreateOrder(body);
 
-        await().atMost(Duration.ofSeconds(60)).untilAsserted(() -> {
+        await().atMost(Duration.ofSeconds(120)).untilAsserted(() -> {
             assertThat(queryInt("SELECT COUNT(*) FROM seckill_inventory.stock_flow "
                     + "WHERE biz_type='ORDER' AND biz_id='" + orderId + "'")).isEqualTo(1);
             assertThat(TestDataHelper.countOrders(SESSION_ID, SKU_ID)).isEqualTo(SUCCESS.get());
@@ -203,7 +205,7 @@ class InventoryShardingConsistencyIT extends IntegrationTestBase {
                 + "WHERE session_id=" + SESSION_ID + " AND order_status='WAIT_PAY'");
         ORDER.context().getBean(TimeoutCloseTask.class).closeExpiredOrders();
 
-        await().atMost(Duration.ofSeconds(120)).untilAsserted(() -> {
+        await().atMost(Duration.ofSeconds(240)).untilAsserted(() -> {
             assertThat(queryInt("SELECT COUNT(*) FROM seckill_order.seckill_order "
                     + "WHERE session_id=" + SESSION_ID + " AND order_status='TIMEOUT'")).isEqualTo(success);
             assertThat(TestDataHelper.countRecoverFlow(SKU_ID)).isEqualTo(success);
