@@ -1,0 +1,109 @@
+name: Seckill-Engine CI
+
+on:
+  push:
+    branches: [ main, develop, "feature/**" ]
+  pull_request:
+    branches: [ main, develop ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Stage 1 Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Compile
+        run: mvn -B clean compile -DskipTests
+
+  unit-test:
+    name: Stage 2 Unit Test
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Run unit + default integration suite
+        run: mvn -B test
+      - name: Upload surefire reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports-unit
+          path: "**/target/surefire-reports"
+          if-no-files-found: error
+
+  integration-test:
+    name: Stage 3 Integration Test (30 ITs)
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Run integration + chaos drills (Testcontainers)
+        run: mvn -B -pl integration-test -am test "-Dchaos.excluded="
+      - name: Upload surefire reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports-integration
+          path: "**/target/surefire-reports"
+          if-no-files-found: error
+
+  quality-check:
+    name: Stage 4 Quality Check (Coverage)
+    runs-on: ubuntu-latest
+    needs: [ unit-test, integration-test ]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Restore test artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: surefire-reports-integration
+          path: reports
+      - name: Generate JaCoCo reports
+        run: mvn -B jacoco:report
+      - name: Upload JaCoCo report
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-report
+          path: "**/target/site/jacoco"
+          if-no-files-found: error
+
+  release-gate:
+    name: Stage 5 Release Gate
+    runs-on: ubuntu-latest
+    needs: quality-check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Run release check
+        run: bash scripts/release-check.sh
+      - name: Upload release report
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-check-report
+          path: docs/04-测试体系/release-check-report.md
+          if-no-files-found: error
