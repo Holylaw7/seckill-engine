@@ -14,7 +14,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @org.junit.jupiter.api.Tag("unit")
 class RequestValidationGlobalFilterTest {
 
-    private final RequestValidationGlobalFilter filter = new RequestValidationGlobalFilter();
+    private final RequestValidationGlobalFilter filter =
+            new RequestValidationGlobalFilter(GatewayTestProfiles.disabledRecorder());
 
     @Test
     void shouldRejectPostWithoutJsonContentType() {

@@ -14,6 +14,7 @@ public final class GatewayConstants {
     public static final int VALIDATION_FILTER_ORDER = -250;
     public static final int JWT_FILTER_ORDER = -200;
     public static final int BLACKLIST_FILTER_ORDER = -150;
+    public static final int ROUTE_PROFILE_FILTER_ORDER = -100;
 
     private GatewayConstants() {
     }

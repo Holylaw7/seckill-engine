@@ -4,6 +4,7 @@ import com.seckill.common.error.ErrorCode;
 import com.seckill.common.result.Result;
 import com.seckill.gateway.constant.GatewayConstants;
 import com.seckill.gateway.util.GatewayResponses;
+import lombok.RequiredArgsConstructor;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
@@ -21,13 +22,17 @@ import java.util.List;
  * 请求参数基础校验：JSON Content-Type、请求体大小上限。
  */
 @Component
+@RequiredArgsConstructor
 public class RequestValidationGlobalFilter implements GlobalFilter, Ordered {
 
     private static final long MAX_BODY_BYTES = 64 * 1024;
     private static final List<String> IGNORE_PATHS = List.of("/api/v1/auth/login", "/api/v1/payments/callback");
 
+    private final GatewayProfileRecorder profileRecorder;
+
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+        long start = profileRecorder.enabled() ? System.nanoTime() : 0L;
         ServerHttpRequest request = exchange.getRequest();
         String path = request.getURI().getPath();
         HttpMethod method = request.getMethod();
@@ -44,6 +49,7 @@ public class RequestValidationGlobalFilter implements GlobalFilter, Ordered {
                         Result.error(ErrorCode.PARAM_ERROR.getCode(), "请求体过大"));
             }
         }
+        profileRecorder.record(exchange, "validation", start);
         return chain.filter(exchange);
     }
 

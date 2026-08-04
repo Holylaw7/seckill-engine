@@ -7,6 +7,7 @@ import com.seckill.gateway.constant.GatewayConstants;
 import com.seckill.gateway.security.JwtTokenParser;
 import com.seckill.gateway.security.JwtTokenParser.Claims;
 import com.seckill.gateway.util.GatewayResponses;
+import com.seckill.gateway.filter.GatewayProfileRecorder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
@@ -32,11 +33,14 @@ public class JwtAuthGlobalFilter implements GlobalFilter, Ordered {
     private static final List<String> WHITE_LIST = List.of("/api/v1/auth/login", "/api/v1/payments/callback");
 
     private final JwtProperties jwtProperties;
+    private final GatewayProfileRecorder profileRecorder;
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+        long start = profileRecorder.enabled() ? System.nanoTime() : 0L;
         String path = exchange.getRequest().getURI().getPath();
         if (!jwtProperties.isEnabled() || isWhitelist(path)) {
+            profileRecorder.record(exchange, "jwt", start);
             return chain.filter(exchange);
         }
 
@@ -59,6 +63,7 @@ public class JwtAuthGlobalFilter implements GlobalFilter, Ordered {
                 .build();
         ServerWebExchange mutatedExchange = exchange.mutate().request(mutated).build();
         mutatedExchange.getAttributes().put(GatewayConstants.GATEWAY_USER_ID, userId);
+        profileRecorder.record(mutatedExchange, "jwt", start);
         return chain.filter(mutatedExchange);
     }
 

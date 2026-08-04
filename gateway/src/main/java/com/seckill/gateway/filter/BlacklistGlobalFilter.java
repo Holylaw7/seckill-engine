@@ -5,6 +5,7 @@ import com.seckill.common.result.Result;
 import com.seckill.gateway.blacklist.BlacklistService;
 import com.seckill.gateway.constant.GatewayConstants;
 import com.seckill.gateway.util.GatewayResponses;
+import com.seckill.gateway.filter.GatewayProfileRecorder;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,9 +29,11 @@ public class BlacklistGlobalFilter implements GlobalFilter, Ordered {
     private static final Logger log = LoggerFactory.getLogger(BlacklistGlobalFilter.class);
 
     private final BlacklistService blacklistService;
+    private final GatewayProfileRecorder profileRecorder;
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+        long start = profileRecorder.enabled() ? System.nanoTime() : 0L;
         String ip = resolveIp(exchange);
         String userId = exchange.getAttribute(GatewayConstants.GATEWAY_USER_ID);
 
@@ -45,7 +48,8 @@ public class BlacklistGlobalFilter implements GlobalFilter, Ordered {
                 })
                 .flatMap(blocked -> blocked
                         ? GatewayResponses.writeJson(exchange, HttpStatus.FORBIDDEN, Result.error(ErrorCode.BLACKLISTED))
-                        : chain.filter(exchange));
+                        : chain.filter(exchange).doOnSubscribe(signal ->
+                                profileRecorder.record(exchange, "blacklist", start)));
     }
 
     private static String resolveIp(ServerWebExchange exchange) {

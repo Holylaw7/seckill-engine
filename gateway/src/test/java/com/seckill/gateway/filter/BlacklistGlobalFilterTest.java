@@ -26,7 +26,7 @@ class BlacklistGlobalFilterTest {
         BlacklistService service = mock(BlacklistService.class);
         when(service.isUserBlocked("10001")).thenReturn(Mono.just(true));
         when(service.isIpBlocked(anyString())).thenReturn(Mono.just(false));
-        BlacklistGlobalFilter filter = new BlacklistGlobalFilter(service);
+        BlacklistGlobalFilter filter = new BlacklistGlobalFilter(service, GatewayTestProfiles.disabledRecorder());
 
         MockServerWebExchange exchange = MockServerWebExchange.from(
                 MockServerHttpRequest.get("/api/v1/seckill/execute"));
@@ -40,7 +40,7 @@ class BlacklistGlobalFilterTest {
     void shouldAllowWhenNotBlocked() {
         BlacklistService service = mock(BlacklistService.class);
         when(service.isIpBlocked(anyString())).thenReturn(Mono.just(false));
-        BlacklistGlobalFilter filter = new BlacklistGlobalFilter(service);
+        BlacklistGlobalFilter filter = new BlacklistGlobalFilter(service, GatewayTestProfiles.disabledRecorder());
 
         AtomicBoolean passed = new AtomicBoolean(false);
         MockServerWebExchange exchange = MockServerWebExchange.from(
@@ -57,7 +57,7 @@ class BlacklistGlobalFilterTest {
     void shouldFailOpenWhenRedisUnavailable() {
         BlacklistService service = mock(BlacklistService.class);
         when(service.isIpBlocked(anyString())).thenReturn(Mono.error(new RuntimeException("redis down")));
-        BlacklistGlobalFilter filter = new BlacklistGlobalFilter(service);
+        BlacklistGlobalFilter filter = new BlacklistGlobalFilter(service, GatewayTestProfiles.disabledRecorder());
 
         AtomicBoolean passed = new AtomicBoolean(false);
         MockServerWebExchange exchange = MockServerWebExchange.from(
@@ -75,7 +75,7 @@ class BlacklistGlobalFilterTest {
         // Arrange
         BlacklistService service = mock(BlacklistService.class);
         when(service.isIpBlocked("203.0.113.5")).thenReturn(Mono.just(true));
-        BlacklistGlobalFilter filter = new BlacklistGlobalFilter(service);
+        BlacklistGlobalFilter filter = new BlacklistGlobalFilter(service, GatewayTestProfiles.disabledRecorder());
         MockServerWebExchange exchange = MockServerWebExchange.from(
                 MockServerHttpRequest.get("/api/v1/seckill/execute")
                         .remoteAddress(new InetSocketAddress("203.0.113.5", 1234)));
@@ -93,7 +93,7 @@ class BlacklistGlobalFilterTest {
         BlacklistService service = mock(BlacklistService.class);
         when(service.isIpBlocked(anyString())).thenReturn(Mono.just(false));
         when(service.isUserBlocked("10001")).thenReturn(Mono.just(true));
-        BlacklistGlobalFilter filter = new BlacklistGlobalFilter(service);
+        BlacklistGlobalFilter filter = new BlacklistGlobalFilter(service, GatewayTestProfiles.disabledRecorder());
         MockServerWebExchange exchange = MockServerWebExchange.from(
                 MockServerHttpRequest.get("/api/v1/seckill/execute"));
         exchange.getAttributes().put(GatewayConstants.GATEWAY_USER_ID, "10001");
@@ -111,7 +111,7 @@ class BlacklistGlobalFilterTest {
         BlacklistService service = mock(BlacklistService.class);
         when(service.isIpBlocked(anyString())).thenReturn(Mono.just(false));
         when(service.isUserBlocked("10001")).thenReturn(Mono.just(false));
-        BlacklistGlobalFilter filter = new BlacklistGlobalFilter(service);
+        BlacklistGlobalFilter filter = new BlacklistGlobalFilter(service, GatewayTestProfiles.disabledRecorder());
         AtomicBoolean passed = new AtomicBoolean(false);
         MockServerWebExchange exchange = MockServerWebExchange.from(
                 MockServerHttpRequest.get("/api/v1/seckill/execute"));
@@ -133,7 +133,7 @@ class BlacklistGlobalFilterTest {
         BlacklistService service = mock(BlacklistService.class);
         when(service.isIpBlocked(anyString())).thenReturn(Mono.just(false));
         when(service.isUserBlocked(anyString())).thenReturn(Mono.error(new RuntimeException("redis down")));
-        BlacklistGlobalFilter filter = new BlacklistGlobalFilter(service);
+        BlacklistGlobalFilter filter = new BlacklistGlobalFilter(service, GatewayTestProfiles.disabledRecorder());
         AtomicBoolean passed = new AtomicBoolean(false);
         MockServerWebExchange exchange = MockServerWebExchange.from(
                 MockServerHttpRequest.get("/api/v1/seckill/execute"));

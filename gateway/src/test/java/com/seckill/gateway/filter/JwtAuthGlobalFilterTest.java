@@ -29,7 +29,7 @@ class JwtAuthGlobalFilterTest {
         JwtProperties properties = new JwtProperties();
         properties.setEnabled(true);
         properties.setSecret(SECRET);
-        filter = new JwtAuthGlobalFilter(properties);
+        filter = new JwtAuthGlobalFilter(properties, GatewayTestProfiles.disabledRecorder());
     }
 
     @Test

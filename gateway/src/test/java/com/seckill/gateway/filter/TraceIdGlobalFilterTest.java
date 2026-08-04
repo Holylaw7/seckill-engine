@@ -12,7 +12,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 @org.junit.jupiter.api.Tag("unit")
 class TraceIdGlobalFilterTest {
 
-    private final TraceIdGlobalFilter filter = new TraceIdGlobalFilter();
+    private final TraceIdGlobalFilter filter =
+            new TraceIdGlobalFilter(GatewayTestProfiles.disabledRecorder());
 
     @Test
     void shouldGenerateTraceIdWhenMissing() {
