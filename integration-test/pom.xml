@@ -14,6 +14,15 @@
     <description>Phase 5.3 集成测试模块：真实中间件（MySQL/Redis/RocketMQ）全链路验证，纯测试模块</description>
 
     <dependencies>
+        <!-- 版本仲裁（置于最前）：seckill-service 经 rocketmq-rocksdb 传递 grpc-api 1.50.0，
+             会遮蔽 gateway 的 1.69.0，导致 GrpcSslConfigurer 反射失败；
+             直接依赖必须位于依赖声明最前，保证解析优先（仅测试范围） -->
+        <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-api</artifactId>
+            <version>1.69.0</version>
+            <scope>test</scope>
+        </dependency>
         <!-- 测试基础设施（Testcontainers 容器与公共基类） -->
         <dependency>
             <groupId>com.seckill</groupId>
@@ -45,24 +54,50 @@
             <artifactId>seckill-service</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
+            <exclusions>
+                <!-- rocketmq-rocksdb 传递 io.grpc 1.50.0，遮蔽 gateway 的 1.69.0（GrpcSslConfigurer 反射失败）；
+                     测试聚合 classpath 仅保留 gateway 的 grpc 1.69.0 -->
+                <exclusion>
+                    <groupId>io.grpc</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>com.seckill</groupId>
             <artifactId>inventory-service</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>io.grpc</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>com.seckill</groupId>
             <artifactId>order-service</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>io.grpc</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>com.seckill</groupId>
             <artifactId>payment-service</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>io.grpc</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <!-- 测试框架与工具 -->
         <dependency>
