@@ -72,17 +72,19 @@ public final class LoadReport {
     }
 
     private static String csvLine(String scenario, LoadMetrics metrics) {
-        String header = "scenario,total,success,failed,qps,avgRT,p50,p95,p99,timestamp";
+        String header = "scenario,total,success,failed,successRate,qps,avgRT,p50,p95,p99,duration,timestamp";
         String row = String.join(",",
                 scenario,
                 String.valueOf(metrics.totalRequests()),
                 String.valueOf(metrics.successCount()),
                 String.valueOf(metrics.failureCount()),
+                String.valueOf(round(metrics.successRate())),
                 String.valueOf(round(metrics.qps())),
                 String.valueOf(round(metrics.avgRtMs())),
                 String.valueOf(round(metrics.p50Ms())),
                 String.valueOf(round(metrics.p95Ms())),
                 String.valueOf(round(metrics.p99Ms())),
+                String.valueOf(metrics.durationMillis()),
                 Instant.ofEpochMilli(metrics.endTimeMillis()).toString());
         return header + System.lineSeparator() + row;
     }

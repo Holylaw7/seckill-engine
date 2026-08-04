@@ -66,8 +66,8 @@ class LoadFrameworkSmokeTest {
                         "\"qps\"", "\"avgRT\"", "\"p50\"", "\"p95\"", "\"p99\"", "\"timestamp\"");
         String csvContent = Files.readString(csv);
         assertThat(csvContent)
-                .contains("scenario,total,success,failed,qps,avgRT,p50,p95,p99,timestamp")
-                .contains("smoke,20,20,0,");
+                .contains("scenario,total,success,failed,successRate,qps,avgRT,p50,p95,p99,duration,timestamp")
+                .contains("smoke,20,20,0,100.0,");
     }
 
     @Test
