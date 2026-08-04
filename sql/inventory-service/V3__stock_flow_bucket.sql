@@ -5,8 +5,30 @@
 -- ============================================================
 USE `seckill_inventory`;
 
-ALTER TABLE `stock_flow`
-    ADD COLUMN `bucket_no` INT DEFAULT NULL COMMENT '命中桶号（NULL=单桶/旧路径）';
+-- 幂等：列已存在时跳过（restoreMysqlSchemas 会重放 V1~V3）
+SET @bucket_col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = 'seckill_inventory'
+      AND TABLE_NAME = 'stock_flow'
+      AND COLUMN_NAME = 'bucket_no'
+);
+SET @bucket_ddl = IF(@bucket_col_exists = 0,
+    'ALTER TABLE `stock_flow` ADD COLUMN `bucket_no` INT DEFAULT NULL COMMENT ''命中桶号（NULL=单桶/旧路径）''',
+    'SELECT 1');
+PREPARE bucket_stmt FROM @bucket_ddl;
+EXECUTE bucket_stmt;
+DEALLOCATE PREPARE bucket_stmt;
 
-CREATE INDEX `idx_sku_bucket`
-    ON `stock_flow` (`sku_id`, `bucket_no`);
+-- 幂等：索引已存在时跳过
+SET @idx_exists = (
+    SELECT COUNT(*) FROM information_schema.STATISTICS
+    WHERE TABLE_SCHEMA = 'seckill_inventory'
+      AND TABLE_NAME = 'stock_flow'
+      AND INDEX_NAME = 'idx_sku_bucket'
+);
+SET @idx_ddl = IF(@idx_exists = 0,
+    'CREATE INDEX `idx_sku_bucket` ON `stock_flow` (`sku_id`, `bucket_no`)',
+    'SELECT 1');
+PREPARE idx_stmt FROM @idx_ddl;
+EXECUTE idx_stmt;
+DEALLOCATE PREPARE idx_stmt;
