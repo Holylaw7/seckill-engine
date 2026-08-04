@@ -47,6 +47,8 @@ public abstract class IntegrationTestBase extends AbstractIntegrationTest {
             "sql/auth-service/V1.0__init.sql",
             "sql/seckill-service/V1.0__init.sql",
             "sql/inventory-service/V1.0__init.sql",
+            "sql/inventory-service/V2__inventory_bucket.sql",
+            "sql/inventory-service/V3__stock_flow_bucket.sql",
             "sql/order-service/V1.0__init.sql",
             "sql/payment-service/V1.0__init.sql",
             "sql/test-data/seckill-test.sql",
@@ -86,10 +88,12 @@ public abstract class IntegrationTestBase extends AbstractIntegrationTest {
                         + "/?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai",
                 "root", MYSQL.getPassword())) {
             for (String script : List.of(
-                    "sql/auth-service/V1.0__init.sql",
-                    "sql/seckill-service/V1.0__init.sql",
-                    "sql/inventory-service/V1.0__init.sql",
-                    "sql/order-service/V1.0__init.sql",
+            "sql/auth-service/V1.0__init.sql",
+            "sql/seckill-service/V1.0__init.sql",
+            "sql/inventory-service/V1.0__init.sql",
+            "sql/inventory-service/V2__inventory_bucket.sql",
+            "sql/inventory-service/V3__stock_flow_bucket.sql",
+            "sql/order-service/V1.0__init.sql",
                     "sql/payment-service/V1.0__init.sql")) {
                 ScriptUtils.executeSqlScript(connection, new ClassPathResource(script));
             }

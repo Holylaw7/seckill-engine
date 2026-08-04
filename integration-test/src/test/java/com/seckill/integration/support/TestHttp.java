@@ -153,6 +153,13 @@ public final class TestHttp {
 
     public static String createOrderMessageJson(String messageId, long userId, long sessionId, long skuId,
                                                 String orderId, int quantity, long amountFen, String traceId) {
+        return createOrderMessageJson(messageId, userId, sessionId, skuId, orderId,
+                quantity, amountFen, traceId, null);
+    }
+
+    public static String createOrderMessageJson(String messageId, long userId, long sessionId, long skuId,
+                                                String orderId, int quantity, long amountFen, String traceId,
+                                                Integer bucketNo) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("messageId", messageId);
         payload.put("userId", userId);
@@ -163,6 +170,9 @@ public final class TestHttp {
         payload.put("quantity", quantity);
         payload.put("amount", amountFen);
         payload.put("traceId", traceId);
+        if (bucketNo != null) {
+            payload.put("bucketNo", bucketNo);
+        }
         return JsonUtils.toJson(payload);
     }
 
