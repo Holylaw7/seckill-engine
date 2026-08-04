@@ -4,6 +4,7 @@ import com.seckill.gateway.constant.GatewayConstants;
 import org.springframework.cloud.gateway.filter.ratelimit.KeyResolver;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
@@ -36,7 +37,10 @@ public class RateLimitConfig {
 
     /**
      * 秒杀路由使用的组合维度：优先 user+api，未登录回退 ip+api。
+     * @Primary：SCG 4.x RequestRateLimiterGatewayFilterFactory 构造注入要求唯一 KeyResolver，
+     * 未标记主 Bean 时网关启动失败（Phase 6.1 发现）。
      */
+    @Primary
     @Bean("rateLimitKeyResolver")
     public KeyResolver rateLimitKeyResolver() {
         return exchange -> {
