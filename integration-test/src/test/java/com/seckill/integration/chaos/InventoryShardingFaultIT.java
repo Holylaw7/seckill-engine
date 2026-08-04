@@ -106,6 +106,7 @@ class InventoryShardingFaultIT extends IntegrationTestBase {
         assertThat(TestDataHelper.countOrders(USER_F01, SESSION_ID, SKU_F01)).isZero();
 
         // 预热后恢复可用
+        migrate(SKU_F01);
         StockService stockService = SECKILL.context().getBean(StockService.class);
         stockService.prepare(String.valueOf(SKU_F01), STOCK);
         for (int i = 0; i < BUCKET_COUNT; i++) {
