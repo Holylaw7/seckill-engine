@@ -5,6 +5,9 @@ import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Redis 黑名单实现。
  *
@@ -34,6 +37,23 @@ public class RedisBlacklistService implements BlacklistService {
     public Mono<Boolean> isUserBlocked(String userId) {
         return redisTemplate.opsForValue().get(USER_PREFIX + userId)
                 .map(value -> true)
+                .defaultIfEmpty(false);
+    }
+
+    @Override
+    public Mono<Boolean> isBlocked(String ip, String userId) {
+        List<String> keys = new ArrayList<>(2);
+        if (ip != null) {
+            keys.add(IP_PREFIX + ip);
+        }
+        if (userId != null) {
+            keys.add(USER_PREFIX + userId);
+        }
+        if (keys.isEmpty()) {
+            return Mono.just(false);
+        }
+        return redisTemplate.opsForValue().multiGet(keys)
+                .map(values -> values.stream().anyMatch(value -> value != null))
                 .defaultIfEmpty(false);
     }
 }

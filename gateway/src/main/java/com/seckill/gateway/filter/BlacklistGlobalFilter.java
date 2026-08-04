@@ -37,10 +37,7 @@ public class BlacklistGlobalFilter implements GlobalFilter, Ordered {
         String ip = resolveIp(exchange);
         String userId = exchange.getAttribute(GatewayConstants.GATEWAY_USER_ID);
 
-        Mono<Boolean> ipCheck = ip == null ? Mono.just(false) : blacklistService.isIpBlocked(ip);
-        Mono<Boolean> userCheck = userId == null ? Mono.just(false) : blacklistService.isUserBlocked(userId);
-
-        return Mono.zip(ipCheck, userCheck, (ipBlocked, userBlocked) -> ipBlocked || userBlocked)
+        return blacklistService.isBlocked(ip, userId)
                 .onErrorResume(e -> {
                     log.warn("blacklist check failed, fail-open, traceId={}",
                             exchange.getRequest().getHeaders().getFirst(GatewayConstants.TRACE_ID_HEADER), e);
