@@ -198,4 +198,53 @@ class CallbackHandlerTest {
         verify(paymentService, times(1)).completePaySuccess(any(), any());
         verify(paySuccessProducer, times(1)).send(any(PaySuccessMessage.class));
     }
+
+    @Test
+    void paymentNotFoundShouldRejectWithFallbackLog() {
+        when(channelRouter.getChannel("MOCK")).thenReturn(paymentChannel);
+        when(paymentChannel.verifyCallback(any())).thenReturn(true);
+        when(snowflakeIdGenerator.nextId()).thenReturn(1L);
+        when(callbackLogMapper.insert(any(PaymentCallbackLog.class))).thenReturn(1);
+        when(paymentService.getByPaymentNo("P1")).thenReturn(null);
+        when(callbackLogMapper.selectOne(any())).thenReturn(null);
+
+        CallbackResult result = handler.handle(context(System.currentTimeMillis() / 1000));
+        assertFalse(result.accepted());
+        verify(callbackLogMapper, times(2)).insert(any(PaymentCallbackLog.class));
+        verify(paySuccessProducer, never()).send(any());
+    }
+
+    @Test
+    void nonSuccessChannelStatusShouldReject() {
+        when(channelRouter.getChannel("MOCK")).thenReturn(paymentChannel);
+        when(paymentChannel.verifyCallback(any())).thenReturn(true);
+        when(snowflakeIdGenerator.nextId()).thenReturn(1L);
+        when(callbackLogMapper.insert(any(PaymentCallbackLog.class))).thenReturn(1);
+        when(paymentService.getByPaymentNo("P1")).thenReturn(waitPayPayment());
+
+        CallbackContext pending = new CallbackContext("MOCK", "P1", "TXN001",
+                new BigDecimal("99.00"), "PENDING", System.currentTimeMillis() / 1000, "sig", "{}", "trace-1");
+        CallbackResult result = handler.handle(pending);
+        assertFalse(result.accepted());
+        verify(paySuccessProducer, never()).send(any());
+    }
+
+    @Test
+    void amountMismatchShouldUpdateExistingLogRow() {
+        when(channelRouter.getChannel("MOCK")).thenReturn(paymentChannel);
+        when(paymentChannel.verifyCallback(any())).thenReturn(true);
+        when(snowflakeIdGenerator.nextId()).thenReturn(1L);
+        when(callbackLogMapper.insert(any(PaymentCallbackLog.class))).thenReturn(1);
+        PaymentOrder payment = waitPayPayment();
+        payment.setAmount(new BigDecimal("88.00"));
+        when(paymentService.getByPaymentNo("P1")).thenReturn(payment);
+        PaymentCallbackLog row = new PaymentCallbackLog();
+        row.setId(1L);
+        when(callbackLogMapper.selectOne(any())).thenReturn(row);
+
+        CallbackResult result = handler.handle(context(System.currentTimeMillis() / 1000));
+        assertFalse(result.accepted());
+        verify(callbackLogMapper).updateById(row);
+        verify(paySuccessProducer, never()).send(any());
+    }
 }

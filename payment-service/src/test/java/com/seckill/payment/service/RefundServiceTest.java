@@ -162,4 +162,52 @@ class RefundServiceTest {
         var result = refundService.retryRefund("R1");
         assertEquals("REFUND_SUCCESS", result.getStatus());
     }
+
+    @Test
+    void refundShouldThrowWhenStartTransitionFails() {
+        when(refundMapper.selectOne(any())).thenReturn(null);
+        when(paymentService.getByPaymentNo("P1")).thenReturn(paySuccessPayment());
+        when(paymentService.startRefund(any())).thenReturn(false);
+
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> refundService.refund(request()));
+        assertEquals(ErrorCode.ORDER_STATUS_INVALID, e.getErrorCode());
+    }
+
+    @Test
+    void retryRefundNotFoundShouldThrow() {
+        when(refundMapper.selectOne(any())).thenReturn(null);
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> refundService.retryRefund("R-missing"));
+        assertEquals(ErrorCode.RESOURCE_NOT_FOUND, e.getErrorCode());
+    }
+
+    @Test
+    void findRefundFailuresShouldReturnList() {
+        PaymentRefund refund = new PaymentRefund();
+        refund.setRefundNo("R1");
+        refund.setStatus("REFUND_FAILED");
+        when(refundMapper.selectList(any())).thenReturn(java.util.List.of(refund));
+
+        var result = refundService.findRefundFailures(10);
+        assertEquals(1, result.size());
+        assertEquals("R1", result.get(0).getRefundNo());
+    }
+
+    @Test
+    void refundInsertConflictShouldFallbackToExisting() {
+        PaymentRefund existing = new PaymentRefund();
+        existing.setRefundNo("R1");
+        existing.setStatus("REFUNDING");
+        when(refundMapper.selectOne(any())).thenReturn(null, existing);
+        when(paymentService.getByPaymentNo("P1")).thenReturn(paySuccessPayment());
+        when(paymentService.startRefund(any())).thenReturn(true);
+        when(snowflakeIdGenerator.nextId()).thenReturn(1L);
+        org.mockito.Mockito.doThrow(new org.springframework.dao.DuplicateKeyException("dup"))
+                .when(refundMapper).insert(any(PaymentRefund.class));
+
+        var result = refundService.refund(request());
+        assertEquals("REFUNDING", result.getStatus());
+        verify(refundMapper, never()).updateById(any(PaymentRefund.class));
+    }
 }

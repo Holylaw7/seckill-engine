@@ -11,6 +11,7 @@ import com.seckill.payment.dto.CreatePayRequest;
 import com.seckill.payment.dto.CreatePayResponse;
 import com.seckill.payment.dto.PayChannelRequest;
 import com.seckill.payment.dto.PayChannelResult;
+import com.seckill.payment.dto.PaymentQueryResponse;
 import com.seckill.payment.entity.PaymentOrder;
 import com.seckill.payment.mapper.PaymentOrderMapper;
 import com.seckill.payment.state.PaymentStateMachine;
@@ -138,5 +139,69 @@ class PaymentServiceTest {
         BusinessException e = assertThrows(BusinessException.class,
                 () -> paymentService.queryPayment(99999L, "P1"));
         assertEquals(ErrorCode.FORBIDDEN, e.getErrorCode());
+    }
+
+    @Test
+    void queryPaymentShouldReturnResponseWhenOwnerMatches() {
+        PaymentOrder payment = new PaymentOrder();
+        payment.setPaymentNo("P1");
+        payment.setOrderNo("SO123");
+        payment.setUserId(10001L);
+        payment.setAmount(new BigDecimal("99.00"));
+        payment.setStatus("WAIT_PAY");
+        when(paymentOrderMapper.selectOne(any())).thenReturn(payment);
+
+        PaymentQueryResponse response = paymentService.queryPayment(10001L, "P1");
+        assertEquals("P1", response.getPaymentNo());
+        assertEquals("WAIT_PAY", response.getStatus());
+    }
+
+    @Test
+    void queryPaymentNotFoundShouldThrow() {
+        when(paymentOrderMapper.selectOne(any())).thenReturn(null);
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> paymentService.queryPayment(10001L, "P1"));
+        assertEquals(ErrorCode.PAYMENT_NOT_FOUND, e.getErrorCode());
+    }
+
+    @Test
+    void failPaymentShouldTransitionWhenCasSucceeds() {
+        PaymentOrder payment = new PaymentOrder();
+        payment.setId(1L);
+        payment.setStatus("WAIT_PAY");
+        payment.setVersion(0);
+        when(paymentOrderMapper.update(isNull(), any())).thenReturn(1);
+        assertEquals(true, paymentService.failPayment(payment));
+    }
+
+    @Test
+    void startRefundShouldTransitionWhenCasSucceeds() {
+        PaymentOrder payment = new PaymentOrder();
+        payment.setId(1L);
+        payment.setStatus("PAY_SUCCESS");
+        payment.setVersion(1);
+        when(paymentOrderMapper.update(isNull(), any())).thenReturn(1);
+        assertEquals(true, paymentService.startRefund(payment));
+    }
+
+    @Test
+    void completeRefundSuccessShouldTransitionAndReleaseActiveKey() {
+        PaymentOrder payment = new PaymentOrder();
+        payment.setId(1L);
+        payment.setStatus("REFUNDING");
+        payment.setVersion(2);
+        when(paymentOrderMapper.update(isNull(), any())).thenReturn(1);
+        assertEquals(true, paymentService.completeRefundSuccess(payment));
+    }
+
+    @Test
+    void createPaymentTransitionFailureShouldThrow() {
+        when(paymentOrderMapper.selectOne(any())).thenReturn(null);
+        when(snowflakeIdGenerator.nextId()).thenReturn(1L, 2L);
+        when(paymentOrderMapper.update(isNull(), any())).thenReturn(0);
+
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> paymentService.createPayment(request()));
+        assertEquals(ErrorCode.ORDER_STATUS_INVALID, e.getErrorCode());
     }
 }

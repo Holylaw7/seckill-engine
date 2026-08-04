@@ -63,6 +63,20 @@ class MockPaymentChannelTest {
         assertFalse(newChannel(true).refund(request).success());
     }
 
+    @Test
+    void verifyCallbackShouldRejectMissingOrBlankSignature() {
+        long timestamp = System.currentTimeMillis() / 1000;
+        assertFalse(newChannel(false).verifyCallback(context(null, timestamp)));
+        assertFalse(newChannel(false).verifyCallback(context("", timestamp)));
+        assertFalse(newChannel(false).verifyCallback(context("   ", timestamp)));
+    }
+
+    @Test
+    void queryShouldReturnSuccess() {
+        PayChannelRequest request = new PayChannelRequest("P1", "SO123", 10001L, new BigDecimal("99.00"));
+        assertEquals("SUCCESS", newChannel(false).query(request));
+    }
+
     private static String sign(String data, String secret) throws Exception {
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
