@@ -45,9 +45,9 @@ class InventoryShardingConsistencyIT extends IntegrationTestBase {
 
     private static final Logger log = LoggerFactory.getLogger(InventoryShardingConsistencyIT.class);
 
-    private static final int STOCK = 1000;
+    private static final int STOCK = 10000;
     private static final int BUCKET_COUNT = 8;
-    private static final int CONCURRENCY = 150;
+    private static final int CONCURRENCY = 500;
     private static final int BUCKET_TOTAL = STOCK / BUCKET_COUNT;
 
     private static final long RUN_ID = System.currentTimeMillis();
