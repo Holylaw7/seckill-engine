@@ -1,0 +1,23 @@
+{
+  "scenario" : "TRAFFIC-SIM-L1",
+  "level" : 1,
+  "target" : 5000,
+  "stock" : 10000,
+  "success" : 5000,
+  "zeroOversell" : true,
+  "deadlocksDelta" : 0,
+  "rowLockWaitsDelta" : 5001,
+  "loadDurationMs" : 480007,
+  "produceQps" : 10.42,
+  "consumeConvergeMs" : 303,
+  "redisCommandsDelta" : 334053,
+  "duplicateSafe" : true,
+  "recoverSample" : 50,
+  "protocolReady" : true,
+  "executed" : true,
+  "codeDistribution" : {
+    "0" : 5000,
+    "30005" : 26317,
+    "EXCEPTION" : 336783
+  }
+}
