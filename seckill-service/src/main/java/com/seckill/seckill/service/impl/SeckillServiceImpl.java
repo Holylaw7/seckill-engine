@@ -21,6 +21,8 @@ import com.seckill.seckill.risk.RiskCheckClient;
 import com.seckill.seckill.service.SessionCacheService;
 import com.seckill.seckill.service.SeckillService;
 import lombok.RequiredArgsConstructor;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -39,6 +41,7 @@ public class SeckillServiceImpl implements SeckillService {
     private final SnowflakeIdGenerator snowflakeIdGenerator;
     private final SeckillProperties properties;
     private final SeckillShardingProperties shardingProperties;
+    private final MeterRegistry meterRegistry;
 
     @Override
     public ExecuteResponse execute(Long userId, String ip, ExecuteRequest request) {
@@ -83,8 +86,13 @@ public class SeckillServiceImpl implements SeckillService {
             deduct = stockService.preDeduct(skuId, userIdStr, request.getQuantity(), userKeyTtlSeconds);
         }
         if (deduct != StockDeductResult.SUCCESS) {
+            counter("seckill_fail_total").increment();
+            if (deduct == StockDeductResult.STOCK_EMPTY) {
+                counter("seckill_stock_empty_total").increment();
+            }
             throw mapDeductError(deduct);
         }
+        counter("seckill_success_total").increment();
 
         long orderId = snowflakeIdGenerator.nextId();
         SeckillOrderMessage message = new SeckillOrderMessage(
@@ -95,11 +103,17 @@ public class SeckillServiceImpl implements SeckillService {
             mqProducer.sendCreateOrder(message);
         } catch (BusinessException e) {
             // 发送失败：回补库存，禁止重试预扣
+            counter("seckill_fail_total").increment();
             stockService.recoverBucket(skuId, userIdStr, request.getQuantity(), true, bucketNo);
             throw new BusinessException(ErrorCode.SECKILL_BUSY, "系统繁忙，请稍后重试");
         }
 
         return new ExecuteResponse("SUCCESS", String.valueOf(orderId), now + SeckillConstants.PAY_DEADLINE_MILLIS);
+    }
+
+    private Counter counter(String name) {
+        return Counter.builder(name).tag("application", "seckill-service")
+                .register(meterRegistry);
     }
 
     private static void validateSession(SessionCacheService.SessionCache session, long now, int quantity) {

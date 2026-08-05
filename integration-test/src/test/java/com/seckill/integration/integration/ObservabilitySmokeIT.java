@@ -1,5 +1,6 @@
 package com.seckill.integration.integration;
 
+import com.seckill.common.result.Result;
 import com.seckill.gateway.GatewayApplication;
 import com.seckill.integration.support.IntegrationTestBase;
 import com.seckill.integration.support.ServiceLauncher;
@@ -9,6 +10,8 @@ import com.seckill.inventory.InventoryApplication;
 import com.seckill.inventory.dto.CreateOrderMessage;
 import com.seckill.inventory.service.InventoryService;
 import com.seckill.inventory.service.InventoryBucketMigrationService;
+import com.seckill.seckill.SeckillApplication;
+import com.seckill.seckill.dto.ExecuteResponse;
 import com.seckill.integration.support.TestDataHelper;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -78,6 +81,34 @@ class ObservabilitySmokeIT extends IntegrationTestBase {
             execute("DELETE FROM seckill_inventory.stock_flow WHERE sku_id=" + skuId);
             execute("DELETE FROM seckill_inventory.inventory_bucket WHERE sku_id=" + skuId);
             execute("DELETE FROM seckill_inventory.inventory WHERE sku_id=" + skuId);
+        }
+    }
+
+    @Test
+    void seckillMetricsShouldBeExposed() throws Exception {
+        long skuId = 90002L;
+        TestDataHelper.seedSeckill(90002L, skuId, 100, "READY", "99.00");
+        TestDataHelper.resetInventory(skuId, 100, 100, 0);
+        ServiceLauncher.RunningService seckill = ServiceSupport.start(
+                SeckillApplication.class, "seckill", "seckill_seckill", "seckill-service",
+                "--seckill.core.risk-check.enabled=false");
+        try {
+            redisSet("seckill:stock:" + skuId, "100");
+            redisSet("seckill:stock:total:" + skuId, "100");
+            Result<ExecuteResponse> result = TestHttp.execute(
+                    "http://localhost:" + seckill.port(), 900002L, 90002L, skuId, 1,
+                    "obs-seckill-" + System.nanoTime());
+            assertThat(result).isNotNull();
+            assertThat(result.getCode()).isZero();
+            String prometheus = TestHttp.getRaw("http://localhost:" + seckill.port()
+                    + "/actuator/prometheus");
+            assertThat(prometheus).contains("seckill_success_total");
+        } finally {
+            seckill.stop();
+            execute("DELETE FROM seckill_seckill.seckill_pre_deduct WHERE session_id=90002");
+            execute("DELETE FROM seckill_seckill.seckill_sku WHERE session_id=90002");
+            execute("DELETE FROM seckill_seckill.seckill_session WHERE id=90002");
+            cleanRedis("seckill:*");
         }
     }
 }

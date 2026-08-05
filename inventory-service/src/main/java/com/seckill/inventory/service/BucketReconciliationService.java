@@ -10,6 +10,8 @@ import com.seckill.inventory.entity.InventoryBucket;
 import com.seckill.inventory.mapper.InventoryBucketMapper;
 import com.seckill.inventory.mapper.InventoryMapper;
 import lombok.RequiredArgsConstructor;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,6 +33,7 @@ public class BucketReconciliationService {
     private final InventoryBucketMapper bucketMapper;
     private final InventoryMapper inventoryMapper;
     private final StringRedisTemplate redisTemplate;
+    private final MeterRegistry meterRegistry;
 
     public BucketReconcileReport check(Long skuId) {
         List<InventoryBucket> buckets = bucketMapper.selectBySku(skuId);
@@ -63,6 +66,10 @@ public class BucketReconciliationService {
         Long redisStock = redisStock(skuId);
         if (redisStock != null && redisStock != sumAvailable) {
             issues.add("Redis 全局库存(" + redisStock + ") != SUM(bucket.available)(" + sumAvailable + ")");
+        }
+        if (!issues.isEmpty()) {
+            Counter.builder("reconcile_diff_total").tag("application", "inventory-service")
+                    .register(meterRegistry).increment(issues.size());
         }
         return new BucketReconcileReport(skuId, buckets.size(), sumTotal, sumLocked,
                 sumAvailable, redisStock, issues);

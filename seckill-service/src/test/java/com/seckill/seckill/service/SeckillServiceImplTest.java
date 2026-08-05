@@ -15,6 +15,7 @@ import com.seckill.seckill.redis.StockDeductResult;
 import com.seckill.seckill.redis.StockService;
 import com.seckill.seckill.risk.RiskCheckClient;
 import com.seckill.seckill.service.impl.SeckillServiceImpl;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -62,7 +63,8 @@ class SeckillServiceImplTest {
         properties.setFlowKeyTtlSeconds(86400L);
         seckillService = new SeckillServiceImpl(
                 sessionCacheService, stockService, skuMapper, mqProducer, riskCheckClient,
-                snowflakeIdGenerator, properties, new SeckillShardingProperties());
+                snowflakeIdGenerator, properties, new SeckillShardingProperties(),
+                new SimpleMeterRegistry());
     }
 
     private void mockSku() {

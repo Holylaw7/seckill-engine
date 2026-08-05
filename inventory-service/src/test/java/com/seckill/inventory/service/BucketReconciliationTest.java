@@ -15,6 +15,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 import java.util.List;
 
@@ -47,9 +48,14 @@ class BucketReconciliationTest {
         TableInfoHelper.initTableInfo(assistant, Inventory.class);
     }
 
+    private BucketReconciliationService newService() {
+        return new BucketReconciliationService(bucketMapper, inventoryMapper,
+                redisTemplate, new SimpleMeterRegistry());
+    }
+
     @Test
     void checkShouldPassWhenAllInvariantsHold() {
-        service = new BucketReconciliationService(bucketMapper, inventoryMapper, redisTemplate);
+        service = newService();
         when(bucketMapper.selectBySku(20001L)).thenReturn(List.of(
                 bucket(0, 125, 0), bucket(1, 125, 0)));
         when(inventoryMapper.selectOne(any())).thenReturn(summary(250, 0, 250, 0));
@@ -62,7 +68,7 @@ class BucketReconciliationTest {
 
     @Test
     void checkShouldReportBucketAndRedisDrift() {
-        service = new BucketReconciliationService(bucketMapper, inventoryMapper, redisTemplate);
+        service = newService();
         InventoryBucket broken = bucket(0, 125, 0);
         broken.setAvailableStock(120);
         when(bucketMapper.selectBySku(20001L)).thenReturn(List.of(broken));
@@ -78,7 +84,7 @@ class BucketReconciliationTest {
 
     @Test
     void syncSummaryShouldRefreshSummaryRow() {
-        service = new BucketReconciliationService(bucketMapper, inventoryMapper, redisTemplate);
+        service = newService();
         when(bucketMapper.selectBySku(20001L)).thenReturn(List.of(
                 bucket(0, 125, 25), bucket(1, 125, 25)));
         when(inventoryMapper.selectOne(any())).thenReturn(summary(250, 0, 250, 0));

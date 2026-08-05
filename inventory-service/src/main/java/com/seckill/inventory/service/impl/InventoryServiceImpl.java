@@ -43,11 +43,21 @@ public class InventoryServiceImpl implements InventoryService {
             }
             sample.stop(Timer.builder("inventory_deduct_duration_seconds")
                     .register(meterRegistry));
+            sample.stop(Timer.builder("inventory_bucket_lock_wait_seconds")
+                    .register(meterRegistry));
             return changed;
         } catch (BusinessException e) {
             counter("inventory_deduct_fail_total").increment();
             sample.stop(Timer.builder("inventory_deduct_duration_seconds")
                     .register(meterRegistry));
+            sample.stop(Timer.builder("inventory_bucket_lock_wait_seconds")
+                    .register(meterRegistry));
+            throw e;
+        } catch (org.springframework.dao.DeadlockLoserDataAccessException e) {
+            counter("inventory_deadlock_total").increment();
+            throw e;
+        } catch (org.springframework.dao.CannotAcquireLockException e) {
+            counter("inventory_deadlock_total").increment();
             throw e;
         }
     }
