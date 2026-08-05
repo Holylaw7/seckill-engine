@@ -10,6 +10,7 @@ import com.seckill.inventory.entity.Inventory;
 import com.seckill.inventory.entity.StockFlow;
 import com.seckill.inventory.config.InventoryShardingProperties;
 import com.seckill.inventory.mapper.InventoryMapper;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import com.seckill.inventory.service.impl.InventoryServiceImpl;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.BeforeAll;
@@ -48,7 +49,8 @@ class InventoryServiceImplTest {
         InventoryShardingProperties properties = new InventoryShardingProperties();
         properties.setEnabled(false);
         properties.setBucketCount(1);
-        return new InventoryServiceImpl(inventoryMapper, stockFlowService, inventoryBucketService, properties);
+        return new InventoryServiceImpl(inventoryMapper, stockFlowService, inventoryBucketService,
+                properties, new SimpleMeterRegistry());
     }
 
     @BeforeAll

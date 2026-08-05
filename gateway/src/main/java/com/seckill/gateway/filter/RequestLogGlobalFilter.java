@@ -11,6 +11,10 @@ import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import lombok.RequiredArgsConstructor;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Tags;
+import io.micrometer.core.instrument.Timer;
 import reactor.core.publisher.Mono;
 
 /**
@@ -23,6 +27,7 @@ public class RequestLogGlobalFilter implements GlobalFilter, Ordered {
     private static final Logger log = LoggerFactory.getLogger(RequestLogGlobalFilter.class);
 
     private final GatewayProfileRecorder profileRecorder;
+    private final MeterRegistry meterRegistry;
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
@@ -33,6 +38,23 @@ public class RequestLogGlobalFilter implements GlobalFilter, Ordered {
         return chain.filter(exchange).doFinally(signal -> {
             long logStart = System.nanoTime();
             HttpStatusCode status = exchange.getResponse().getStatusCode();
+            Tags tags = Tags.of(
+                    "method", request.getMethod() == null ? "-" : request.getMethod().name(),
+                    "uri", request.getURI().getPath(),
+                    "application", "gateway");
+            Timer.builder("gateway_request_duration").tags(tags)
+                    .register(meterRegistry)
+                    .record(System.currentTimeMillis() - start, java.util.concurrent.TimeUnit.MILLISECONDS);
+            Counter.builder("gateway_request_total").tags(tags)
+                    .register(meterRegistry).increment();
+            if (status != null && status.value() >= 500) {
+                Counter.builder("gateway_error_total").tags(tags)
+                        .register(meterRegistry).increment();
+            }
+            if (status != null && status.value() == 429) {
+                Counter.builder("gateway_429_total").tags(tags)
+                        .register(meterRegistry).increment();
+            }
             log.info("gateway request method={} uri={} traceId={} status={} cost={}ms ip={}",
                     request.getMethod(), request.getURI(), traceId,
                     status == null ? "-" : status.value(),

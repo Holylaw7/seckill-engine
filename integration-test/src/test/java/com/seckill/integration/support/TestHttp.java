@@ -124,6 +124,11 @@ public final class TestHttp {
                 }).getBody();
     }
 
+    /** GET 原始响应体（供可观测性/健康检查） */
+    public static String getRaw(String url) {
+        return CALLBACK_REST.getForObject(url, String.class);
+    }
+
     public static Result<OrderDetailResponse> getOrder(String baseUrl, long userId,
                                                        String orderId, String traceId) {
         return REST.exchange(baseUrl + "/api/v1/orders/" + orderId, HttpMethod.GET,

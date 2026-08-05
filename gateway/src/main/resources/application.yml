@@ -56,6 +56,15 @@ seckill:
       enabled: true
       secret: seckill-engine-dev-secret-change-me
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  metrics:
+    tags:
+      application: gateway
+
 # 说明（冻结）：
 # - 基础版路由使用静态 URI，生产环境 Phase 7 切换为 lb://服务名 + Nacos 服务发现；
 # - 限流参数为基础值，Phase 5 压测后经 Nacos 动态校准；

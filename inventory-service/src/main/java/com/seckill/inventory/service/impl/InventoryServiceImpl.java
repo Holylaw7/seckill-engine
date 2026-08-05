@@ -14,6 +14,9 @@ import com.seckill.inventory.service.InventoryBucketService;
 import com.seckill.inventory.service.InventoryService;
 import com.seckill.inventory.service.StockFlowService;
 import lombok.RequiredArgsConstructor;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,14 +28,28 @@ public class InventoryServiceImpl implements InventoryService {
     private final StockFlowService stockFlowService;
     private final InventoryBucketService inventoryBucketService;
     private final InventoryShardingProperties shardingProperties;
+    private final MeterRegistry meterRegistry;
 
     @Override
     @Transactional
     public boolean confirmDeduct(CreateOrderMessage message) {
-        if (shardingProperties.isEnabled()) {
-            return inventoryBucketService.deduct(message);
+        Timer.Sample sample = Timer.start(meterRegistry);
+        try {
+            boolean changed = shardingProperties.isEnabled()
+                    ? inventoryBucketService.deduct(message)
+                    : confirmDeductLegacy(message);
+            if (changed) {
+                counter("inventory_deduct_success_total").increment();
+            }
+            sample.stop(Timer.builder("inventory_deduct_duration_seconds")
+                    .register(meterRegistry));
+            return changed;
+        } catch (BusinessException e) {
+            counter("inventory_deduct_fail_total").increment();
+            sample.stop(Timer.builder("inventory_deduct_duration_seconds")
+                    .register(meterRegistry));
+            throw e;
         }
-        return confirmDeductLegacy(message);
     }
 
     private boolean confirmDeductLegacy(CreateOrderMessage message) {
@@ -77,10 +94,20 @@ public class InventoryServiceImpl implements InventoryService {
     @Override
     @Transactional
     public String recoverStock(String orderId, Long skuId, int quantity, String bizType) {
-        if (shardingProperties.isEnabled()) {
-            return inventoryBucketService.recover(orderId, skuId, quantity, bizType);
+        try {
+            String flowNo = shardingProperties.isEnabled()
+                    ? inventoryBucketService.recover(orderId, skuId, quantity, bizType)
+                    : recoverStockLegacy(orderId, skuId, quantity, bizType);
+            counter("inventory_recover_total").increment();
+            return flowNo;
+        } catch (BusinessException e) {
+            throw e;
         }
-        return recoverStockLegacy(orderId, skuId, quantity, bizType);
+    }
+
+    private Counter counter(String name) {
+        return Counter.builder(name).tag("application", "inventory-service")
+                .register(meterRegistry);
     }
 
     private String recoverStockLegacy(String orderId, Long skuId, int quantity, String bizType) {

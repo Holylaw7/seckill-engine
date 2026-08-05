@@ -52,3 +52,12 @@ inventory:
   sharding:
     enabled: false
     bucket-count: 1
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  metrics:
+    tags:
+      application: inventory-service
