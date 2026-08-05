@@ -9,6 +9,17 @@ spring:
     username: inventory_rw
     password: change-me
     driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 20
+      connection-timeout: 5000
+      validation-timeout: 3000
+      leak-detection-threshold: 10000
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      # RC-02：分桶对账读取 Redis 需要显式超时
+      timeout: 3s
 
 rocketmq:
   name-server: localhost:9876

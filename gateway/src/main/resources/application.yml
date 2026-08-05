@@ -47,6 +47,8 @@ spring:
     redis:
       host: localhost
       port: 6379
+      # RC-02：显式命令超时，避免依赖挂起拖垮请求（fail-open 依赖该超时）
+      timeout: 3s
 
 seckill:
   gateway:
