@@ -57,11 +57,23 @@ jobs:
       - name: Run OWASP Dependency Check
         # Phase 6.6.3 Release 安全门禁：CVSS >= 7 判定 FAIL，阻塞 release-gate
         run: mvn -B org.owasp:dependency-check-maven:10.0.4:check -DfailBuildOnCVSS=7 -Dformat=JSON,HTML -DprettyPrint=true
+      - name: Collect dependency reports for release audit
+        # Phase 6.7 Task 7：dependency-report.html 归档至 docs/06-production/security/
+        run: |
+          mkdir -p docs/06-production/security
+          find . -path '*/target/dependency-check-report.html' -exec cp -f {} docs/06-production/security/dependency-report.html \; 2>/dev/null || true
+          find . -path '*/target/dependency-check-report.json' -exec cp -f {} docs/06-production/security/dependency-report.json \; 2>/dev/null || true
       - name: Upload dependency scan reports
         uses: actions/upload-artifact@v4
         with:
           name: dependency-scan-report
           path: "**/target/dependency-check-report.*"
+          if-no-files-found: error
+      - name: Upload release security audit folder
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-security-audit
+          path: docs/06-production/security
           if-no-files-found: error
 
   integration-test:
