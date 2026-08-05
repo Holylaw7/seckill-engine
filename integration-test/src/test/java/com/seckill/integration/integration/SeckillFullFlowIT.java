@@ -103,6 +103,11 @@ class SeckillFullFlowIT extends IntegrationTestBase {
                 // classpath 同名 application.yml 仅加载第一个（gateway），
                 // producer group 等专属配置统一命令行补齐
                 "--rocketmq.producer.group=integration-" + appName,
+                // Phase 6.6 内部接口 Service ACL：类路径同名 yml 不生效，统一命令行补齐
+                "--seckill.internal-auth.enabled=true",
+                "--seckill.internal-auth.clients.order-service=dev-order-secret",
+                "--seckill.internal-auth.clients.inventory-service=dev-inventory-secret",
+                "--seckill.internal-auth.admin-secret=dev-admin-secret",
                 // integration-test classpath 携带 gateway 模块（WebFlux）；
                 // 各业务服务为 Servlet 应用，排除 Gateway 全套自动配置（端到端不经 gateway 转发）
                 "--spring.autoconfigure.exclude="

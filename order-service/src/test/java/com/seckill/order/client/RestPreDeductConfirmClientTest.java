@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestClient;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -27,6 +28,8 @@ class RestPreDeductConfirmClientTest {
         properties.getPreDeductConfirm().setBaseUrl(BASE_URL);
         RestPreDeductConfirmClient client =
                 new RestPreDeductConfirmClient(builder.build(), properties);
+        ReflectionTestUtils.setField(client, "clientName", "order-service");
+        ReflectionTestUtils.setField(client, "clientSecret", "dev-order-secret");
 
         server.expect(requestTo(BASE_URL + "/api/v1/seckill/internal/pre-deducts/confirm"))
                 .andExpect(method(HttpMethod.POST))
@@ -46,6 +49,8 @@ class RestPreDeductConfirmClientTest {
         properties.getPreDeductConfirm().setBaseUrl(BASE_URL);
         RestPreDeductConfirmClient client =
                 new RestPreDeductConfirmClient(builder.build(), properties);
+        ReflectionTestUtils.setField(client, "clientName", "order-service");
+        ReflectionTestUtils.setField(client, "clientSecret", "dev-order-secret");
 
         server.expect(requestTo(BASE_URL + "/api/v1/seckill/internal/pre-deducts/confirm"))
                 .andExpect(method(HttpMethod.POST))

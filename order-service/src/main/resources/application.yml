@@ -31,6 +31,10 @@ mybatis-plus:
       logic-not-delete-value: 0
 
 seckill:
+  internal-auth:
+    # Phase 6.6 内部接口 Service ACL（生产由配置中心下发）
+    client-name: order-service
+    client-secret: dev-order-secret
   mq:
     consumer:
       # Phase 6.1 调优：16 消费线程（基线 20；实测 order 链路 269 QPS）

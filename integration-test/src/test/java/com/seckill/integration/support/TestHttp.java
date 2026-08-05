@@ -1,6 +1,7 @@
 package com.seckill.integration.support;
 
 import com.seckill.common.result.Result;
+import com.seckill.common.security.InternalSignature;
 import com.seckill.common.util.JsonUtils;
 import com.seckill.auth.dto.LoginRequest;
 import com.seckill.auth.dto.LoginResponse;
@@ -160,8 +161,14 @@ public final class TestHttp {
     }
 
     public static Result<ReconcileReport> reconcile(String baseUrl, long skuId) {
+        HttpHeaders headers = new HttpHeaders();
+        String timestamp = String.valueOf(System.currentTimeMillis());
+        headers.set("X-Service-Name", "admin");
+        headers.set("X-Service-Timestamp", timestamp);
+        headers.set("X-Service-Signature",
+                InternalSignature.sign("dev-admin-secret", "admin:" + timestamp));
         return REST.exchange(baseUrl + "/api/v1/inventory/admin/reconcile?skuId=" + skuId, HttpMethod.GET,
-                null, new ParameterizedTypeReference<Result<ReconcileReport>>() {
+                new HttpEntity<>(headers), new ParameterizedTypeReference<Result<ReconcileReport>>() {
                 }).getBody();
     }
 

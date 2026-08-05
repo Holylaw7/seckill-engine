@@ -37,6 +37,13 @@ mybatis-plus:
       logic-not-delete-value: 0
 
 seckill:
+  internal-auth:
+    enabled: true
+    window-millis: 300000
+    clients:
+      order-service: dev-order-secret
+      inventory-service: dev-inventory-secret
+    admin-secret: dev-admin-secret
   core:
     worker-id: 2
     flow-key-ttl-seconds: 86400

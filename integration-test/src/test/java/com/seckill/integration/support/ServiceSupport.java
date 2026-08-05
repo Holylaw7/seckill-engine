@@ -36,6 +36,10 @@ public final class ServiceSupport {
                 "--spring.data.redis.port=" + IntegrationTestBase.redisPort(),
                 "--rocketmq.name-server=" + IntegrationTestBase.rocketMqNameServer(),
                 "--rocketmq.producer.group=integration-" + appName,
+                "--seckill.internal-auth.enabled=true",
+                "--seckill.internal-auth.clients.order-service=dev-order-secret",
+                "--seckill.internal-auth.clients.inventory-service=dev-inventory-secret",
+                "--seckill.internal-auth.admin-secret=dev-admin-secret",
                 "--spring.autoconfigure.exclude=" + GATEWAY_EXCLUDES));
         args.addAll(List.of(extra));
         return args;

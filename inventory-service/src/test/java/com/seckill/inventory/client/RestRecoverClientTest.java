@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestClient;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -27,6 +28,8 @@ class RestRecoverClientTest {
         InventoryProperties properties = new InventoryProperties();
         properties.getRecover().setBaseUrl(BASE_URL);
         RestRecoverClient client = new RestRecoverClient(builder.build(), properties);
+        ReflectionTestUtils.setField(client, "clientName", "inventory-service");
+        ReflectionTestUtils.setField(client, "clientSecret", "dev-inventory-secret");
 
         server.expect(requestTo(BASE_URL + "/api/v1/seckill/internal/stocks/recover"))
                 .andExpect(method(HttpMethod.POST))
@@ -45,6 +48,8 @@ class RestRecoverClientTest {
         InventoryProperties properties = new InventoryProperties();
         properties.getRecover().setBaseUrl(BASE_URL);
         RestRecoverClient client = new RestRecoverClient(builder.build(), properties);
+        ReflectionTestUtils.setField(client, "clientName", "inventory-service");
+        ReflectionTestUtils.setField(client, "clientSecret", "dev-inventory-secret");
 
         server.expect(requestTo(BASE_URL + "/api/v1/seckill/internal/stocks/recover"))
                 .andExpect(method(HttpMethod.POST))
