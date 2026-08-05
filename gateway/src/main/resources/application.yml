@@ -55,6 +55,13 @@ seckill:
     jwt:
       enabled: true
       secret: seckill-engine-dev-secret-change-me
+    canary:
+      # Phase 6.7 Canary 灰度：默认关闭（weight=0 等价旧网关），上线按 5→25→50→100 由运维平台调整
+      enabled: false
+      weight: 0
+      version: RC1
+      control-enabled: false
+      control-token: ""
 
 management:
   endpoints:
