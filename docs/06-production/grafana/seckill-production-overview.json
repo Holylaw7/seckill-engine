@@ -1,0 +1,430 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "title": "1. Gateway Traffic",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 1 },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 1 },
+      "id": 2,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(gateway_request_total{application=\"gateway\"}[1m])) by (uri)",
+          "legendFormat": "{{uri}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Gateway QPS",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 1 },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 1 },
+      "id": 3,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(gateway_request_duration_seconds_bucket{application=\"gateway\"}[5m])) by (le))",
+          "legendFormat": "p99",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(gateway_request_duration_seconds_bucket{application=\"gateway\"}[5m])) by (le))",
+          "legendFormat": "p95",
+          "refId": "B"
+        }
+      ],
+      "title": "Gateway Latency",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": { "unit": "short" },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 1 },
+      "id": 4,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(gateway_error_total{application=\"gateway\"}[5m]))",
+          "legendFormat": "error",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(gateway_rate_limit_total{application=\"gateway\"}[5m]))",
+          "legendFormat": "rate-limit",
+          "refId": "B"
+        }
+      ],
+      "title": "Gateway Error / Rate Limit",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 },
+      "id": 5,
+      "title": "2. Seckill Success Rate",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": { "unit": "short" },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 10 },
+      "id": 6,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(seckill_success_total{application=\"seckill-service\"}[5m]))",
+          "legendFormat": "success",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(seckill_fail_total{application=\"seckill-service\"}[5m]))",
+          "legendFormat": "fail",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(rate(seckill_stock_empty_total{application=\"seckill-service\"}[5m]))",
+          "legendFormat": "stock-empty",
+          "refId": "C"
+        }
+      ],
+      "title": "Seckill Execute",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "displayMode": "color-background" },
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "OK" } } },
+            { "type": "range", "options": { "from": 0.01, "to": 1, "result": { "text": "DEGRADED", "color": "orange" } } }
+          ],
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 10 },
+      "id": 7,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(seckill_success_total{application=\"seckill-service\"}[5m])) / clamp_min(sum(rate(seckill_success_total{application=\"seckill-service\"}[5m])) + sum(rate(seckill_fail_total{application=\"seckill-service\"}[5m])), 0.001)",
+          "legendFormat": "success-rate",
+          "refId": "A"
+        }
+      ],
+      "title": "Seckill Success Rate",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 18 },
+      "id": 8,
+      "title": "3. Inventory Safety",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": { "unit": "short" },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 19 },
+      "id": 9,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(inventory_deduct_success_total{application=\"inventory-service\"}[5m]))",
+          "legendFormat": "deduct-success",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(inventory_deduct_fail_total{application=\"inventory-service\"}[5m]))",
+          "legendFormat": "deduct-fail",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(rate(inventory_recover_total{application=\"inventory-service\"}[5m]))",
+          "legendFormat": "recover",
+          "refId": "C"
+        }
+      ],
+      "title": "Inventory Deduct / Recover",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": { "unit": "s" },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 19 },
+      "id": 10,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(inventory_bucket_lock_wait_seconds_bucket{application=\"inventory-service\"}[5m])) by (le))",
+          "legendFormat": "p99 lock-wait",
+          "refId": "A"
+        }
+      ],
+      "title": "Bucket Lock Wait",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": { "unit": "short" },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 19 },
+      "id": 11,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(inventory_deadlock_total{application=\"inventory-service\"}[1h]))",
+          "legendFormat": "deadlock",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(increase(reconcile_diff_total{application=\"inventory-service\"}[1h]))",
+          "legendFormat": "reconcile-diff",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(increase(inventory_repair_total{application=\"inventory-service\"}[1h]))",
+          "legendFormat": "repair",
+          "refId": "C"
+        }
+      ],
+      "title": "Inventory Risk Counters",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 27 },
+      "id": 12,
+      "title": "4. MQ Health",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": { "unit": "short" },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 28 },
+      "id": 13,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "expr": "sum(rocketmq_consumer_lag) by (consumer_group)",
+          "legendFormat": "{{consumer_group}}",
+          "refId": "A"
+        }
+      ],
+      "title": "MQ Consumer Lag",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": { "unit": "short" },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 28 },
+      "id": 14,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(rocketmq_retry_total[5m]))",
+          "legendFormat": "retry",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(increase(rocketmq_dlq_total[1h]))",
+          "legendFormat": "dlq",
+          "refId": "B"
+        }
+      ],
+      "title": "MQ Retry / DLQ",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "OK", "color": "green" } } },
+            { "type": "range", "options": { "from": 1, "to": 1000000, "result": { "text": "ALERT", "color": "red" } } }
+          ],
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 28 },
+      "id": 15,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "max(rocketmq_consumer_lag)",
+          "legendFormat": "max-lag",
+          "refId": "A"
+        }
+      ],
+      "title": "MQ Max Lag",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 36 },
+      "id": 16,
+      "title": "5. Recovery Status",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": { "unit": "short" },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 37 },
+      "id": 17,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(inventory_recover_total{application=\"inventory-service\"}[1h]))",
+          "legendFormat": "recover",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(increase(inventory_repair_total{application=\"inventory-service\"}[1h]))",
+          "legendFormat": "repair",
+          "refId": "B"
+        }
+      ],
+      "title": "Recovery Actions",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": { "unit": "short" },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 37 },
+      "id": 18,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(reconcile_diff_total{application=\"inventory-service\"}[1h]))",
+          "legendFormat": "diff",
+          "refId": "A"
+        }
+      ],
+      "title": "Reconcile Diff",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["seckill", "production"],
+  "templating": {
+    "list": [
+      {
+        "current": {},
+        "hide": 0,
+        "label": "Data source",
+        "name": "DS_PROMETHEUS",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "type": "datasource"
+      }
+    ]
+  },
+  "time": { "from": "now-6h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Seckill Production Overview",
+  "uid": "seckill-production-overview",
+  "version": 1,
+  "weekStart": ""
+}

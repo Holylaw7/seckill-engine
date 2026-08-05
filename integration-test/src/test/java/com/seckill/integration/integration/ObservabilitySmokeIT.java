@@ -10,6 +10,7 @@ import com.seckill.inventory.InventoryApplication;
 import com.seckill.inventory.dto.CreateOrderMessage;
 import com.seckill.inventory.service.InventoryService;
 import com.seckill.inventory.service.InventoryBucketMigrationService;
+import com.seckill.inventory.service.ReconciliationService;
 import com.seckill.seckill.SeckillApplication;
 import com.seckill.seckill.dto.ExecuteResponse;
 import com.seckill.integration.support.TestDataHelper;
@@ -72,10 +73,14 @@ class ObservabilitySmokeIT extends IntegrationTestBase {
             CreateOrderMessage message = new CreateOrderMessage(
                     "obs-msg-1", 900001L, skuId, 90001L, "OBS-ORDER-1", 1000L, 1, null, 0);
             assertThat(inventoryService.confirmDeduct(message)).isTrue();
+            ReconciliationService reconciliationService =
+                    inventory.context().getBean(ReconciliationService.class);
+            assertThat(reconciliationService.repair(skuId, 99, "obs-repair-drill", null)).isNotBlank();
             String prometheus = TestHttp.getRaw("http://localhost:" + inventory.port()
                     + "/actuator/prometheus");
             assertThat(prometheus).contains("inventory_deduct_success_total");
             assertThat(prometheus).contains("inventory_deduct_duration_seconds");
+            assertThat(prometheus).contains("inventory_repair_total");
         } finally {
             inventory.stop();
             execute("DELETE FROM seckill_inventory.stock_flow WHERE sku_id=" + skuId);

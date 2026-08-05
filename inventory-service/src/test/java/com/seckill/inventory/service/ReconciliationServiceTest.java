@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -38,7 +39,8 @@ class ReconciliationServiceTest {
     private StockFlowService stockFlowService;
 
     private ReconciliationService newService() {
-        return new ReconciliationService(inventoryMapper, stockFlowMapper, stockFlowService);
+        return new ReconciliationService(inventoryMapper, stockFlowMapper, stockFlowService,
+                new SimpleMeterRegistry());
     }
 
     @BeforeAll

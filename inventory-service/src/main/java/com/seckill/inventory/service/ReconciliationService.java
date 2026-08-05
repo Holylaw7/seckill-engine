@@ -11,6 +11,8 @@ import com.seckill.inventory.entity.StockFlow;
 import com.seckill.inventory.mapper.InventoryMapper;
 import com.seckill.inventory.mapper.StockFlowMapper;
 import lombok.RequiredArgsConstructor;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +29,7 @@ public class ReconciliationService {
     private final InventoryMapper inventoryMapper;
     private final StockFlowMapper stockFlowMapper;
     private final StockFlowService stockFlowService;
+    private final MeterRegistry meterRegistry;
 
     public ReconcileReport check(Long skuId) {
         List<String> issues = new ArrayList<>();
@@ -83,6 +86,8 @@ public class ReconciliationService {
                     .set(Inventory::getVersion, inventory.getVersion() + 1));
             if (updated == 1) {
                 String repairNo = "REPAIR-" + skuId + "-" + System.currentTimeMillis();
+                Counter.builder("inventory_repair_total").tag("application", "inventory-service")
+                        .register(meterRegistry).increment();
                 return stockFlowService.createFlow(InventoryConstants.FLOW_TYPE_REPAIR,
                         InventoryConstants.BIZ_TYPE_MANUAL, repairNo, skuId,
                         targetAvailable - before, before, targetAvailable, operatorId, reason);

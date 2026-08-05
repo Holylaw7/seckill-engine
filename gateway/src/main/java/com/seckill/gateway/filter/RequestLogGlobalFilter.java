@@ -54,6 +54,9 @@ public class RequestLogGlobalFilter implements GlobalFilter, Ordered {
             if (status != null && status.value() == 429) {
                 Counter.builder("gateway_429_total").tags(tags)
                         .register(meterRegistry).increment();
+                // Phase 6.6 限流指标别名（告警统一使用 gateway_rate_limit_total）
+                Counter.builder("gateway_rate_limit_total").tags(tags)
+                        .register(meterRegistry).increment();
             }
             log.info("gateway request method={} uri={} traceId={} status={} cost={}ms ip={}",
                     request.getMethod(), request.getURI(), traceId,
