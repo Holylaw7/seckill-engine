@@ -240,6 +240,10 @@ class GatewayProductionCapacityBenchmark extends IntegrationTestBase {
         java.nio.file.Files.writeString(directory.resolve("gateway-capacity-report.json"),
                 new com.fasterxml.jackson.databind.ObjectMapper()
                         .writerWithDefaultPrettyPrinter().writeValueAsString(root));
+        // Phase 6.6.6 生产容量复核文件（G-09 同源别名）
+        java.nio.file.Files.writeString(directory.resolve("gateway-production-capacity.json"),
+                new com.fasterxml.jackson.databind.ObjectMapper()
+                        .writerWithDefaultPrettyPrinter().writeValueAsString(root));
         StringBuilder csv = new StringBuilder(
                 "scenario,concurrency,durationSeconds,total,qps,p50Ms,p95Ms,p99Ms,errorRate,"
                         + "redisCommandsPerSec,cpuPercent,heapUsedBytes,gcCount,gcTimeMs"

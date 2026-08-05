@@ -116,6 +116,11 @@ public final class IsolatedTopology {
         args.add("--spring.data.redis.port=" + IntegrationTestBase.redisPort());
         args.add("--rocketmq.name-server=" + IntegrationTestBase.rocketMqNameServer());
         args.add("--rocketmq.producer.group=isolated-" + appName);
+        // Phase 6.6 内部接口 Service ACL：类路径同名 yml 不生效，隔离拓扑统一命令行补齐
+        args.add("--seckill.internal-auth.enabled=true");
+        args.add("--seckill.internal-auth.clients.order-service=dev-order-secret");
+        args.add("--seckill.internal-auth.clients.inventory-service=dev-inventory-secret");
+        args.add("--seckill.internal-auth.admin-secret=dev-admin-secret");
         args.add("--spring.autoconfigure.exclude=" + GATEWAY_EXCLUDES);
         args.addAll(extras);
         running.put(name, launch(name, port, args, logDir));

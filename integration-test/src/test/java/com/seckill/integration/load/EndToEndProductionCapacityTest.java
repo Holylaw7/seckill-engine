@@ -277,6 +277,10 @@ class EndToEndProductionCapacityTest extends IntegrationTestBase {
         java.nio.file.Files.writeString(directory.resolve("L-07.json"),
                 new com.fasterxml.jackson.databind.ObjectMapper()
                         .writerWithDefaultPrettyPrinter().writeValueAsString(report));
+        // Phase 6.6.6 生产容量复核文件（L-07 同源别名）
+        java.nio.file.Files.writeString(directory.resolve("production-e2e-capacity-report.json"),
+                new com.fasterxml.jackson.databind.ObjectMapper()
+                        .writerWithDefaultPrettyPrinter().writeValueAsString(report));
         StringBuilder csv = new StringBuilder(
                 "scenario,target,stock,success,loadDurationMs,produceQps,consumeConvergeMs,consumeQps,"
                         + "rowLockWaitsDelta,deadlocksDelta,redisCommandsDelta,duplicateSafe,recoverSample"
