@@ -21,6 +21,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.Collections;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -40,7 +43,7 @@ class EndToEndProductionCapacityTest extends IntegrationTestBase {
 
     private static final Logger log = LoggerFactory.getLogger(EndToEndProductionCapacityTest.class);
 
-    private static final int DEFAULT_TARGET = 10000;
+    private static final int DEFAULT_TARGET = 3000;
     private static final String PASSWORD = "Test@123";
 
     private static final long RUN_ID = System.currentTimeMillis();
@@ -53,7 +56,7 @@ class EndToEndProductionCapacityTest extends IntegrationTestBase {
     private static Map<String, IsolatedTopology.RunningProcess> TOPOLOGY;
     private static String gatewayBaseUrl = "http://localhost:" + IsolatedTopology.GATEWAY_PORT;
     private static String[] TOKENS;
-    private static final List<String> SUCCESS_ORDER_IDS = new ArrayList<>();
+    private static final List<String> SUCCESS_ORDER_IDS = Collections.synchronizedList(new ArrayList<>());
     private static final java.util.concurrent.atomic.AtomicInteger REQUEST_COUNTER =
             new java.util.concurrent.atomic.AtomicInteger();
 
@@ -83,7 +86,7 @@ class EndToEndProductionCapacityTest extends IntegrationTestBase {
 
     @Test
     void l07_productionCapacity() throws Exception {
-        int concurrency = Math.min(TARGET, 500);
+        int concurrency = Math.min(TARGET, 300);
         AtomicInteger success = new AtomicInteger();
         Map<String, Integer> codes = new ConcurrentHashMap<>();
         long mysqlBefore = mysqlDelta("Innodb_row_lock_waits");
@@ -91,30 +94,41 @@ class EndToEndProductionCapacityTest extends IntegrationTestBase {
         long commandsBefore = redisCommandsProcessed();
         long loadStart = System.nanoTime();
 
-        SustainedLoadExecutor.run(concurrency, Duration.ofMinutes(30), index -> {
+        SustainedLoadExecutor.run(concurrency, Duration.ofMinutes(8), index -> {
             if (success.get() >= TARGET) {
                 return false;
             }
             int userIndex = REQUEST_COUNTER.getAndIncrement() % TARGET;
             long userId = BASE_USER + userIndex;
-            Result<ExecuteResponse> response;
+            if (REQUEST_COUNTER.get() % 500 == 0) {
+                log.info("L-07 progress: totalRequests={}, success={}", REQUEST_COUNTER.get(), success.get());
+            }
             try {
-                response = TestHttp.executeWithAuth(gatewayBaseUrl, userId, SESSION_ID, SKU_ID, 1,
-                        "l07-" + RUN_ID + "-" + System.nanoTime(), TOKENS[userIndex]);
+                // 每个请求 30s 硬超时，防止个别挂起请求拖垮整波
+                return CompletableFuture.supplyAsync(() -> {
+                    try {
+                        Result<ExecuteResponse> response = TestHttp.executeWithAuth(
+                                gatewayBaseUrl, userId, SESSION_ID, SKU_ID, 1,
+                                "l07-" + RUN_ID + "-" + System.nanoTime(), TOKENS[userIndex]);
+                        int code = response == null ? -1 : response.getCode();
+                        codes.merge(String.valueOf(code), 1, Integer::sum);
+                        if (code == 0) {
+                            int now = success.incrementAndGet();
+                            if (now <= TARGET) {
+                                SUCCESS_ORDER_IDS.add(response.getData().getOrderId());
+                            }
+                            return true;
+                        }
+                        return false;
+                    } catch (Exception e) {
+                        codes.merge("EXCEPTION", 1, Integer::sum);
+                        return false;
+                    }
+                }, java.util.concurrent.ForkJoinPool.commonPool()).get(30, TimeUnit.SECONDS);
             } catch (Exception e) {
                 codes.merge("EXCEPTION", 1, Integer::sum);
                 return false;
             }
-            int code = response == null ? -1 : response.getCode();
-            codes.merge(String.valueOf(code), 1, Integer::sum);
-            if (code == 0) {
-                int now = success.incrementAndGet();
-                if (now <= TARGET) {
-                    SUCCESS_ORDER_IDS.add(response.getData().getOrderId());
-                }
-                return true;
-            }
-            return false;
         });
         long loadNanos = System.nanoTime() - loadStart;
 

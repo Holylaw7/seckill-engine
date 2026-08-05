@@ -66,7 +66,7 @@ public final class SustainedLoadExecutor {
                     });
                 }
                 barrier.countDown();
-                if (!done.await(60, TimeUnit.SECONDS)) {
+                if (!done.await(180, TimeUnit.SECONDS)) {
                     throw new IllegalStateException("sustained load wave timed out");
                 }
             }

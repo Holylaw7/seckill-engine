@@ -15,13 +15,12 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.client.ClientHttpResponse;
-import org.springframework.http.client.JdkClientHttpRequestFactory;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.ResponseErrorHandler;
 import org.springframework.web.client.RestTemplate;
 
-import java.net.http.HttpClient;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.time.Duration;
@@ -41,12 +40,10 @@ public final class TestHttp {
     private static final RestTemplate CALLBACK_REST;
 
     static {
-        // JDK HttpClient 连接复用（keep-alive），避免压测下临时端口耗尽
-        HttpClient httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(10))
-                .build();
-        JdkClientHttpRequestFactory restFactory = new JdkClientHttpRequestFactory(httpClient);
-        restFactory.setReadTimeout(Duration.ofSeconds(15));
+        // 确定性超时：JDK HttpClient 读超时在持续负载下未可靠生效，改用 HttpURLConnection（keep-alive 复用）
+        SimpleClientHttpRequestFactory restFactory = new SimpleClientHttpRequestFactory();
+        restFactory.setConnectTimeout(10_000);
+        restFactory.setReadTimeout(15_000);
         REST = new RestTemplate(restFactory);
         CALLBACK_REST = new RestTemplate(restFactory);
         // 回调接口以 HTTP 4xx 表达业务拒绝，客户端需要拿到状态码而非抛异常
