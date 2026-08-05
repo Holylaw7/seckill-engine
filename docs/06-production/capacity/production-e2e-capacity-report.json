@@ -1,0 +1,21 @@
+{
+  "scenario" : "L-07",
+  "target" : 10000,
+  "stock" : 20000,
+  "totalRequests" : 10200,
+  "success" : 10000,
+  "zeroOversell" : true,
+  "loadDurationMs" : 480017,
+  "produceQps" : 20.83,
+  "consumeConvergeMs" : 298,
+  "consumeQps" : 33557.05,
+  "rowLockWaitsDelta" : 10039,
+  "deadlocksDelta" : 0,
+  "redisCommandsDelta" : 142083,
+  "duplicateSafe" : true,
+  "recoverSample" : 100,
+  "codeDistribution" : {
+    "0" : 10000,
+    "30005" : 200
+  }
+}

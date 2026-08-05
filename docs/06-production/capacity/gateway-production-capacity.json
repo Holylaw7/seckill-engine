@@ -1,0 +1,76 @@
+{
+  "scenario" : "G-09",
+  "topology" : "isolated-jvm",
+  "capacityInflection" : "c100 (errorRate=0.00%, p99=3113.86ms)",
+  "scenarios" : [ {
+    "concurrency" : 100,
+    "durationSeconds" : 20,
+    "total" : 7200,
+    "qps" : 357.86,
+    "p50Ms" : 119.0,
+    "p95Ms" : 486.62,
+    "p99Ms" : 3113.86,
+    "errorRate" : 0.0,
+    "codeDistribution" : {
+      "0" : 999,
+      "30005" : 6201
+    },
+    "redisCommandsDelta" : 76356,
+    "redisCommandsPerSec" : 3817.0,
+    "resource" : {
+      "gcCount" : 20,
+      "threadCount" : 144,
+      "memoryBytes" : 3143997848,
+      "gcTimeMs" : 70,
+      "cpuPercent" : 35.67666666666667,
+      "heapUsedBytes" : 132856968
+    }
+  }, {
+    "concurrency" : 500,
+    "durationSeconds" : 20,
+    "total" : 45000,
+    "qps" : 2236.92,
+    "p50Ms" : 130.72,
+    "p95Ms" : 256.81,
+    "p99Ms" : 267.2,
+    "errorRate" : 80.54,
+    "codeDistribution" : {
+      "0" : 1,
+      "30005" : 8757,
+      "EXCEPTION" : 36242
+    },
+    "redisCommandsDelta" : 87588,
+    "redisCommandsPerSec" : 4379.0,
+    "resource" : {
+      "gcCount" : 28,
+      "threadCount" : 550,
+      "memoryBytes" : 3142875872,
+      "gcTimeMs" : 112,
+      "cpuPercent" : 4.01,
+      "heapUsedBytes" : 186373008
+    }
+  }, {
+    "concurrency" : 1000,
+    "durationSeconds" : 20,
+    "total" : 36000,
+    "qps" : 1777.99,
+    "p50Ms" : 502.24,
+    "p95Ms" : 574.25,
+    "p99Ms" : 583.96,
+    "errorRate" : 99.27,
+    "codeDistribution" : {
+      "30005" : 262,
+      "EXCEPTION" : 35738
+    },
+    "redisCommandsDelta" : 173590,
+    "redisCommandsPerSec" : 8679.0,
+    "resource" : {
+      "gcCount" : 32,
+      "threadCount" : 1056,
+      "memoryBytes" : 3149468270,
+      "gcTimeMs" : 125,
+      "cpuPercent" : 4.056666666666667,
+      "heapUsedBytes" : 155437168
+    }
+  } ]
+}

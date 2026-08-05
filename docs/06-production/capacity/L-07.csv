@@ -1,0 +1,2 @@
+scenario,target,stock,success,loadDurationMs,produceQps,consumeConvergeMs,consumeQps,rowLockWaitsDelta,deadlocksDelta,redisCommandsDelta,duplicateSafe,recoverSample
+L-07,10000,20000,10000,480017,20.83,298,33557.05,10039,0,142083,true,100
