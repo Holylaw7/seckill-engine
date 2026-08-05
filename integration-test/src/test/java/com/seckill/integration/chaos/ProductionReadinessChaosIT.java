@@ -26,6 +26,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.http.ResponseEntity;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.utility.DockerImageName;
 
 import java.time.Duration;
 import java.util.List;
@@ -112,20 +114,27 @@ class ProductionReadinessChaosIT extends IntegrationTestBase {
     @Order(2)
     void f02_redisBlacklistUnavailableShouldFailOpen() throws Exception {
         startCore();
-        GATEWAY_A = startGateway("gw-a");
+        // 独立 Redis：仅本次演练网关使用，避免停止共享容器污染整个套件
+        GenericContainer<?> chaosRedis = new GenericContainer<>(
+                DockerImageName.parse("redis:7.2.4")).withExposedPorts(6379);
+        chaosRedis.start();
+        GATEWAY_A = startGateway("gw-a", chaosRedis.getHost(), chaosRedis.getMappedPort(6379));
         String token = login();
         String base = "http://localhost:" + GATEWAY_A.port();
 
-        REDIS.stop();
         try {
+            chaosRedis.stop();
             ResponseEntity<String> response = TestHttp.executeRawNoError(
                     base, USER, SESSION_ID, SKU_F02, 1, "chaos-f02-" + System.nanoTime(), token);
             // fail-open：网关不返回 403（黑名单拒绝），请求穿透到后端（后端 Redis 不可用返回业务错误）
             assertThat(response.getStatusCode().value()).isNotEqualTo(403);
             log.info("F-02 pass: blacklist fail-open, status={}", response.getStatusCode().value());
         } finally {
-            REDIS.start();
-            awaitRedisReady(Duration.ofSeconds(60));
+            try {
+                chaosRedis.stop();
+            } catch (Exception ignored) {
+                // 已停止
+            }
         }
     }
 
@@ -194,6 +203,11 @@ class ProductionReadinessChaosIT extends IntegrationTestBase {
     }
 
     private static ServiceLauncher.RunningService startGateway(String name) throws Exception {
+        return startGateway(name, redisHost(), redisPort());
+    }
+
+    private static ServiceLauncher.RunningService startGateway(String name, String redisHost, int redisPort)
+            throws Exception {
         List<String> args = List.of(
                 "--server.port=0",
                 "--spring.application.name=gateway-" + name,
@@ -202,8 +216,8 @@ class ProductionReadinessChaosIT extends IntegrationTestBase {
                         + "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,"
                         + "org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration,"
                         + "org.springframework.boot.autoconfigure.jdbc.JdbcTemplateAutoConfiguration",
-                "--spring.data.redis.host=" + redisHost(),
-                "--spring.data.redis.port=" + redisPort(),
+                "--spring.data.redis.host=" + redisHost,
+                "--spring.data.redis.port=" + redisPort,
                 "--spring.data.redis.timeout=3s",
                 "--seckill.gateway.jwt.secret=" + JWT_SECRET,
                 "--spring.cloud.gateway.routes[0].id=auth-service",
