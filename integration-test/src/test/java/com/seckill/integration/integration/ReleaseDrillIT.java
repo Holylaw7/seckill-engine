@@ -103,4 +103,40 @@ class ReleaseDrillIT extends IntegrationTestBase {
             cleanRedis("seckill:*");
         }
     }
+
+    @Test
+    void mysqlBackupRestoreDrillShouldKeepLegacyIntact() throws Exception {
+        TestDataHelper.resetInventory(SKU_ID, 1000, 1000, 0);
+        // 1. 备份 inventory（迁移前）
+        execute("DROP TABLE IF EXISTS seckill_inventory.inventory_bak");
+        execute("CREATE TABLE seckill_inventory.inventory_bak AS "
+                + "SELECT * FROM seckill_inventory.inventory WHERE sku_id=" + SKU_ID);
+        assertThat(queryInt("SELECT total_stock FROM seckill_inventory.inventory_bak "
+                + "WHERE sku_id=" + SKU_ID)).isEqualTo(1000);
+
+        // 2. 迁移（dry-run + 真实）
+        ServiceLauncher.RunningService inventory = ServiceSupport.start(
+                InventoryApplication.class, "inventory", "seckill_inventory", "inventory-service");
+        try {
+            InventoryBucketMigrationService migration =
+                    inventory.context().getBean(InventoryBucketMigrationService.class);
+            migration.migrate(SKU_ID, 1000, 8, true);
+            migration.migrate(SKU_ID, 1000, 8, false);
+            assertThat(queryInt("SELECT SUM(total_stock) FROM seckill_inventory.inventory_bucket "
+                    + "WHERE sku_id=" + SKU_ID)).isEqualTo(1000);
+        } finally {
+            inventory.stop();
+        }
+
+        // 3. 回滚 + 恢复：删除分桶，旧 inventory 与备份一致
+        execute("DELETE FROM seckill_inventory.inventory_bucket WHERE sku_id=" + SKU_ID);
+        assertThat(queryInt("SELECT total_stock FROM seckill_inventory.inventory WHERE sku_id=" + SKU_ID))
+                .isEqualTo(queryInt("SELECT total_stock FROM seckill_inventory.inventory_bak "
+                        + "WHERE sku_id=" + SKU_ID));
+        assertThat(queryInt("SELECT available_stock FROM seckill_inventory.inventory WHERE sku_id=" + SKU_ID))
+                .isEqualTo(queryInt("SELECT available_stock FROM seckill_inventory.inventory_bak "
+                        + "WHERE sku_id=" + SKU_ID));
+        execute("DROP TABLE IF EXISTS seckill_inventory.inventory_bak");
+        execute("DELETE FROM seckill_inventory.inventory WHERE sku_id=" + SKU_ID);
+    }
 }
