@@ -6,6 +6,8 @@ import com.seckill.inventory.entity.InventoryBucket;
 import com.seckill.inventory.mapper.InventoryBucketMapper;
 import com.seckill.inventory.mapper.InventoryMapper;
 import lombok.RequiredArgsConstructor;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -35,6 +37,7 @@ public class RedisStockValidationJob {
     private final InventoryBucketMapper bucketMapper;
     private final InventoryMapper inventoryMapper;
     private final StringRedisTemplate redisTemplate;
+    private final MeterRegistry meterRegistry;
 
     public RedisStockValidationReport validate(Long skuId) {
         List<String> diffs = new ArrayList<>();
@@ -80,6 +83,12 @@ public class RedisStockValidationJob {
             diffs.add("inventory.available(" + inventory.getAvailableStock()
                     + ") != Redis global(" + redisGlobal + ")");
         }
+        boolean pass = diffs.isEmpty();
+        Counter.builder("inventory_bucket_consistency_check_total")
+                .tag("application", "inventory-service")
+                .tag("result", pass ? "pass" : "fail")
+                .register(meterRegistry)
+                .increment();
         return new RedisStockValidationReport(
                 skuId, redisGlobal, redisBucketSum,
                 inventory == null ? null : inventory.getTotalStock().longValue(),

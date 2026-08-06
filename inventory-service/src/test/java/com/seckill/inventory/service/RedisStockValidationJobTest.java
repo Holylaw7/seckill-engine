@@ -15,6 +15,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 import java.util.List;
 
@@ -57,8 +58,7 @@ class RedisStockValidationJobTest {
                 bucket(0, 500, 0), bucket(1, 500, 0)));
         when(inventoryMapper.selectOne(any())).thenReturn(inventory(1000, 0, 1000));
 
-        RedisStockValidationReport report = new RedisStockValidationJob(
-                bucketMapper, inventoryMapper, redisTemplate).validate(SKU_ID);
+        RedisStockValidationReport report = service().validate(SKU_ID);
 
         assertThat(report.isPass()).isTrue();
         assertThat(report.redisGlobal()).isEqualTo(1000L);
@@ -76,8 +76,7 @@ class RedisStockValidationJobTest {
                 bucket(0, 500, 0), bucket(1, 500, 0)));
         when(inventoryMapper.selectOne(any())).thenReturn(inventory(1000, 0, 1000));
 
-        RedisStockValidationReport report = new RedisStockValidationJob(
-                bucketMapper, inventoryMapper, redisTemplate).validate(SKU_ID);
+        RedisStockValidationReport report = service().validate(SKU_ID);
 
         assertThat(report.isPass()).isFalse();
         assertThat(report.diffs()).anyMatch(diff -> diff.contains("Redis global"));
@@ -91,11 +90,15 @@ class RedisStockValidationJobTest {
         when(bucketMapper.selectBySku(SKU_ID)).thenReturn(List.of(bucket(0, 500, 0)));
         when(inventoryMapper.selectOne(any())).thenReturn(inventory(1200, 0, 1200));
 
-        RedisStockValidationReport report = new RedisStockValidationJob(
-                bucketMapper, inventoryMapper, redisTemplate).validate(SKU_ID);
+        RedisStockValidationReport report = service().validate(SKU_ID);
 
         assertThat(report.isPass()).isFalse();
         assertThat(report.diffs()).anyMatch(diff -> diff.contains("inventory.total"));
+    }
+
+    private RedisStockValidationJob service() {
+        return new RedisStockValidationJob(bucketMapper, inventoryMapper, redisTemplate,
+                new SimpleMeterRegistry());
     }
 
     private static InventoryBucket bucket(int bucketNo, int total, int locked) {
