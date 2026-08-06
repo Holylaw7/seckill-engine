@@ -14,7 +14,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class CanaryReleaseWorkflowTest {
 
     private static HealthSnapshot healthy(double qps) {
-        return new HealthSnapshot(qps, 0.0, 300, 5, 0, 0, 0, 0);
+        return HealthSnapshot.of(qps, 0.0, 300, 5, 0, 0, 0, 0);
     }
 
     @Test
@@ -48,7 +48,7 @@ class CanaryReleaseWorkflowTest {
                 calls++;
                 if (calls == 2) {
                     // 25% 阶段出现 Critical：oversell>0
-                    return new HealthSnapshot(500, 0.0, 300, 5, 2, 0, 0, 0);
+                    return HealthSnapshot.of(500, 0.0, 300, 5, 2, 0, 0, 0);
                 }
                 return healthy(500);
             }
