@@ -1,0 +1,17 @@
+{
+  "scenario" : "REAL-CANARY-WINDOW",
+  "startTime" : "2026-08-06T03:53:32.603733200Z",
+  "endTime" : "2026-08-06T03:58:39.529188Z",
+  "trafficPercent" : 5,
+  "requestCount" : 1134180,
+  "canaryCount" : 56364,
+  "stableCount" : 1077816,
+  "canaryRatio" : 4.97,
+  "successCount" : 1134180,
+  "errorCount" : 0,
+  "oversell" : 0,
+  "deadlock" : 0,
+  "mqLag" : 0,
+  "redisConsistency" : "PASS（引用 RedisStockValidationIT / CanaryExpansionIT）",
+  "decision" : "PASS"
+}
