@@ -27,6 +27,12 @@ public abstract class AbstractIntegrationTest {
     private static final boolean ROCKETMQ_ENABLED =
             Boolean.parseBoolean(System.getProperty("testcontainers.rocketmq.enabled", "true"));
 
+    /** Phase 6.11：固定映射端口可配置（默认 19876/20911），端口缓存冲突时可用备用端口。 */
+    private static final int ROCKETMQ_NAMESRV_PORT =
+            Integer.getInteger("testcontainers.rocketmq.namesrv-port", 19876);
+    private static final int ROCKETMQ_BROKER_PORT =
+            Integer.getInteger("testcontainers.rocketmq.broker-port", 20911);
+
     protected static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0.36")
             .withDatabaseName("seckill_test")
             .withUsername("test")
@@ -40,15 +46,15 @@ public abstract class AbstractIntegrationTest {
 
     /**
      * RocketMQ 单容器（namesrv + broker）：
-     * 固定映射 19876/20911（避开本机开发容器占用的 9876/10911），
-     * broker 通告 127.0.0.1:20911（映射端口），保证宿主机 producer/consumer 可直连。
+     * 固定映射（默认 19876/20911，可经系统属性覆盖；避开本机开发容器占用的 9876/10911），
+     * broker 通告 127.0.0.1:20911（容器内端口），保证宿主机 producer/consumer 可直连。
      */
     protected static final GenericContainer<?> ROCKETMQ = new GenericContainer<>(
             DockerImageName.parse("apache/rocketmq:5.3.1"))
             .withExposedPorts(9876, 20911)
             .withCreateContainerCmdModifier(cmd -> cmd.getHostConfig().withPortBindings(
-                    new PortBinding(Ports.Binding.bindPort(19876), new ExposedPort(9876)),
-                    new PortBinding(Ports.Binding.bindPort(20911), new ExposedPort(20911))))
+                    new PortBinding(Ports.Binding.bindPort(ROCKETMQ_NAMESRV_PORT), new ExposedPort(9876)),
+                    new PortBinding(Ports.Binding.bindPort(ROCKETMQ_BROKER_PORT), new ExposedPort(20911))))
             .withCommand("sh", "-c",
                     "printf 'brokerIP1=127.0.0.1\\nlistenPort=20911\\nautoCreateTopicEnable=true\\n' > /tmp/broker.conf; "
                             + "sh mqnamesrv & sleep 10; sh mqbroker -n 127.0.0.1:9876 -c /tmp/broker.conf & tail -f /dev/null")

@@ -58,26 +58,41 @@ public final class IsolatedTopology {
     }
 
     public static Map<String, RunningProcess> startAll() throws Exception {
+        return startAll(false, 1);
+    }
+
+    /**
+     * Phase 6.11：压测拓扑调整——seckill/inventory 同时开启分桶（默认关闭保持旧行为）。
+     */
+    public static Map<String, RunningProcess> startAll(boolean sharding, int bucketCount) throws Exception {
         Path logDir = Path.of("target", "isolated-topology");
         Files.createDirectories(logDir);
         Map<String, RunningProcess> running = new LinkedHashMap<>();
+        List<String> shardingArgs = sharding
+                ? List.of("--inventory.sharding.enabled=true",
+                "--inventory.sharding.bucket-count=" + bucketCount)
+                : List.of();
         try {
             startService("auth", "com.seckill.auth.AuthApplication", "seckill_auth", "auth-service",
-                    AUTH_PORT, List.of("--seckill.auth.jwt.secret=" + JWT_SECRET), logDir, running);
+                    AUTH_PORT, List.of("--seckill.auth.jwt.secret=" + JWT_SECRET), List.of(), logDir, running);
             startService("seckill", "com.seckill.seckill.SeckillApplication", "seckill_seckill", "seckill-service",
                     SECKILL_PORT, List.of(
                             "--seckill.core.risk-check.enabled=false",
                             "--server.tomcat.threads.max=1000",
-                            "--server.tomcat.accept-count=20000"), logDir, running);
+                            "--server.tomcat.accept-count=20000",
+                            // Phase 6.11 压测拓扑：降噪异常日志（防日志 I/O 拖垮单机压测）
+                            "--logging.level.com.seckill.common.exception.GlobalExceptionHandler=OFF"),
+                    shardingArgs, logDir, running);
             startService("order", "com.seckill.order.OrderApplication", "seckill_order", "order-service",
                     ORDER_PORT, List.of(
                             "--seckill.order.pre-deduct-confirm.base-url=http://localhost:" + SECKILL_PORT,
                             "--seckill.order.timeout-close.period-seconds=3600000",
                             "--seckill.order.timeout-close.batch-size=10000",
-                            "--seckill.order.cancel-notify-compensate-period-seconds=3600000"), logDir, running);
+                            "--seckill.order.cancel-notify-compensate-period-seconds=3600000"), List.of(), logDir, running);
             startService("inventory", "com.seckill.inventory.InventoryApplication", "seckill_inventory", "inventory-service",
                     INVENTORY_PORT, List.of(
-                            "--seckill.inventory.recover.base-url=http://localhost:" + SECKILL_PORT), logDir, running);
+                            "--seckill.inventory.recover.base-url=http://localhost:" + SECKILL_PORT),
+                    shardingArgs, logDir, running);
             startGateway(logDir, running);
             for (RunningProcess process : running.values()) {
                 awaitPort(process.port(), Duration.ofSeconds(150));
@@ -98,7 +113,7 @@ public final class IsolatedTopology {
     }
 
     private static void startService(String name, String mainClass, String schema, String appName,
-                                     int port, List<String> extras, Path logDir,
+                                     int port, List<String> extras, List<String> shardingArgs, Path logDir,
                                      Map<String, RunningProcess> running) throws IOException {
         List<String> args = new ArrayList<>();
         args.add(javaBin());
@@ -122,6 +137,7 @@ public final class IsolatedTopology {
         args.add("--seckill.internal-auth.clients.inventory-service=dev-inventory-secret");
         args.add("--seckill.internal-auth.admin-secret=dev-admin-secret");
         args.add("--spring.autoconfigure.exclude=" + GATEWAY_EXCLUDES);
+        args.addAll(shardingArgs);
         args.addAll(extras);
         running.put(name, launch(name, port, args, logDir));
     }
@@ -160,6 +176,8 @@ public final class IsolatedTopology {
         args.add("--spring.cloud.gateway.routes[3].id=payment-service");
         args.add("--spring.cloud.gateway.routes[3].uri=http://localhost:1");
         args.add("--spring.cloud.gateway.routes[3].predicates[0]=Path=/api/v1/payments/**");
+        // Phase 6.11 压测拓扑：降噪请求日志（高 QPS 下每请求 INFO 刷盘）
+        args.add("--logging.level.com.seckill.gateway.filter.RequestLogGlobalFilter=OFF");
         running.put("gateway", launch("gateway", GATEWAY_PORT, args, logDir));
     }
 

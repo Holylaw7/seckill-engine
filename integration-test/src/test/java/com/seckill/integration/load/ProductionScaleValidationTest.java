@@ -64,10 +64,10 @@ class ProductionScaleValidationTest extends IntegrationTestBase {
         STOCK = TARGET * 2;
         TestDataHelper.seedSeckill(SESSION_ID, SKU_ID, STOCK, "READY", "99.00");
         TestDataHelper.resetInventory(SKU_ID, STOCK, STOCK, 0);
-        TOPOLOGY = IsolatedTopology.startAll();
+        // Phase 6.11：压测拓扑调整——开启分桶 N=8（seckill Lua v2 + inventory bucket 扣减）
+        TOPOLOGY = IsolatedTopology.startAll(true, 8);
         seedLoadUsers();
-        redisSet("seckill:stock:" + SKU_ID, String.valueOf(STOCK));
-        redisSet("seckill:stock:total:" + SKU_ID, String.valueOf(STOCK));
+        prepareBuckets();
         TOKENS = loginAll();
         log.info("L-08 topology ready, target={}, users={}", TARGET, TOKENS.length);
     }
@@ -88,6 +88,7 @@ class ProductionScaleValidationTest extends IntegrationTestBase {
         AtomicInteger success = new AtomicInteger();
         Map<String, Integer> codes = new ConcurrentHashMap<>();
         long deadlockBefore = mysqlDelta("Innodb_deadlocks");
+        long lockWaitBefore = mysqlDelta("Innodb_row_lock_waits");
         long loadStart = System.nanoTime();
 
         SustainedLoadExecutor.run(concurrency, Duration.ofMinutes(90), index -> {
@@ -114,7 +115,7 @@ class ProductionScaleValidationTest extends IntegrationTestBase {
                 codes.merge("EXCEPTION", 1, Integer::sum);
                 return false;
             }
-        });
+        }, () -> success.get() >= TARGET);
         long loadNanos = System.nanoTime() - loadStart;
 
         assertThat(success.get()).isEqualTo(TARGET);
@@ -128,16 +129,20 @@ class ProductionScaleValidationTest extends IntegrationTestBase {
         });
         long convergeMs = (System.nanoTime() - convergeStart) / 1_000_000;
 
-        // 零超卖 + 不变量 + 分桶汇总
+        // 零超卖 + 不变量 + 分桶口径（分桶模式下 inventory 为汇总行，实时口径看 bucket SUM）
         assertThat(redisGet("seckill:stock:" + SKU_ID)).isEqualTo(String.valueOf(STOCK - TARGET));
-        assertThat(queryInt("SELECT available_stock FROM seckill_inventory.inventory WHERE sku_id=" + SKU_ID))
-                .isEqualTo(STOCK - TARGET);
-        assertThat(queryInt("SELECT locked_stock FROM seckill_inventory.inventory WHERE sku_id=" + SKU_ID))
-                .isEqualTo(TARGET);
-        assertThat(queryInt("SELECT available_stock + locked_stock FROM seckill_inventory.inventory WHERE sku_id=" + SKU_ID))
-                .isEqualTo(STOCK);
+        assertThat(queryInt("SELECT SUM(available_stock) FROM seckill_inventory.inventory_bucket "
+                + "WHERE sku_id=" + SKU_ID)).isEqualTo(STOCK - TARGET);
+        assertThat(queryInt("SELECT SUM(locked_stock) FROM seckill_inventory.inventory_bucket "
+                + "WHERE sku_id=" + SKU_ID)).isEqualTo(TARGET);
+        assertThat(queryInt("SELECT SUM(available_stock) + SUM(locked_stock) "
+                + "FROM seckill_inventory.inventory_bucket WHERE sku_id=" + SKU_ID)).isEqualTo(STOCK);
+        assertThat(queryInt("SELECT total_stock FROM seckill_inventory.inventory WHERE sku_id=" + SKU_ID))
+                .isEqualTo(queryInt("SELECT SUM(total_stock) FROM seckill_inventory.inventory_bucket "
+                        + "WHERE sku_id=" + SKU_ID));
 
         long deadlocks = mysqlDelta("Innodb_deadlocks") - deadlockBefore;
+        long lockWaitDelta = mysqlDelta("Innodb_row_lock_waits") - lockWaitBefore;
         assertThat(deadlocks).isZero();
 
         // 重复消息安全：抽样 1 单重发
@@ -160,6 +165,10 @@ class ProductionScaleValidationTest extends IntegrationTestBase {
         await().atMost(Duration.ofSeconds(180)).untilAsserted(() ->
                 assertThat(queryInt("SELECT COUNT(*) FROM seckill_inventory.stock_flow "
                         + "WHERE change_type='RECOVER' AND sku_id=" + SKU_ID)).isEqualTo(sample));
+        // 分桶口径：recover 后 Redis 全局与 SUM(bucket.available) 同步恢复
+        assertThat(redisGet("seckill:stock:" + SKU_ID)).isEqualTo(String.valueOf(STOCK - TARGET + sample));
+        assertThat(queryInt("SELECT SUM(available_stock) FROM seckill_inventory.inventory_bucket "
+                + "WHERE sku_id=" + SKU_ID)).isEqualTo(STOCK - TARGET + sample);
 
         Map<String, Object> report = new LinkedHashMap<>();
         report.put("scenario", "L-08");
@@ -171,6 +180,9 @@ class ProductionScaleValidationTest extends IntegrationTestBase {
         report.put("loadDurationMs", loadNanos / 1_000_000);
         report.put("produceQps", round(TARGET / (loadNanos / 1_000_000_000.0)));
         report.put("consumeConvergeMs", convergeMs);
+        report.put("consumeTps", round(TARGET / (convergeMs / 1000.0)));
+        report.put("rowLockWaitsDelta", lockWaitDelta);
+        report.put("bucketCount", 8);
         report.put("mqBacklogZero", true);
         report.put("duplicateSafe", true);
         report.put("recoverSample", sample);
@@ -222,6 +234,33 @@ class ProductionScaleValidationTest extends IntegrationTestBase {
                         .append("',1,'USER')");
             }
             execute(sql.toString());
+        }
+    }
+
+    /**
+     * 分桶预热：inventory_bucket 8 行（SUM=STOCK）+ Redis global/bucket keys。
+     * 与 InventoryBucketMigrationService.plannedStates 一致（STOCK=100000 → 12500/桶）。
+     */
+    private static void prepareBuckets() throws Exception {
+        int bucketTotal = STOCK / 8;
+        execute("DELETE FROM seckill_inventory.inventory_bucket WHERE sku_id=" + SKU_ID);
+        StringBuilder sql = new StringBuilder(
+                "INSERT INTO seckill_inventory.inventory_bucket "
+                        + "(id, sku_id, bucket_no, total_stock, locked_stock, available_stock, version) VALUES ");
+        for (int i = 0; i < 8; i++) {
+            if (i > 0) {
+                sql.append(',');
+            }
+            sql.append('(').append(SKU_ID * 10L + i).append(',').append(SKU_ID)
+                    .append(',').append(i)
+                    .append(',').append(bucketTotal)
+                    .append(",0,").append(bucketTotal).append(",0)");
+        }
+        execute(sql.toString());
+        redisSet("seckill:stock:" + SKU_ID, String.valueOf(STOCK));
+        redisSet("seckill:stock:total:" + SKU_ID, String.valueOf(STOCK));
+        for (int i = 0; i < 8; i++) {
+            redisSet("seckill:stock:bucket:" + SKU_ID + ":" + i, String.valueOf(bucketTotal));
         }
     }
 

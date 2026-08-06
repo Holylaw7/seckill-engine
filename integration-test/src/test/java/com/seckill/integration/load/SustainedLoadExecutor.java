@@ -9,6 +9,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BooleanSupplier;
 
 /**
  * 持续压测驱动（Phase 6.4）：固定并发 + 分波次 barrier 连续压测，直到达到指定时长。
@@ -29,6 +30,14 @@ public final class SustainedLoadExecutor {
     }
 
     public static Result run(int concurrency, Duration duration, LoadAction action) throws Exception {
+        return run(concurrency, duration, action, null);
+    }
+
+    /**
+     * Phase 6.11：支持成功目标达成后提前停止（stopCondition 为 true 时结束压测，避免空转到时长上限）。
+     */
+    public static Result run(int concurrency, Duration duration, LoadAction action,
+                             BooleanSupplier stopCondition) throws Exception {
         ExecutorService pool = Executors.newFixedThreadPool(concurrency, runnable -> {
             Thread thread = new Thread(runnable, "sustained-load");
             thread.setDaemon(true);
@@ -40,7 +49,8 @@ public final class SustainedLoadExecutor {
         long start = System.nanoTime();
         long deadline = start + duration.toNanos();
         try {
-            while (System.nanoTime() < deadline) {
+            while (System.nanoTime() < deadline
+                    && (stopCondition == null || !stopCondition.getAsBoolean())) {
                 CountDownLatch barrier = new CountDownLatch(1);
                 CountDownLatch done = new CountDownLatch(concurrency);
                 for (int i = 0; i < concurrency; i++) {
