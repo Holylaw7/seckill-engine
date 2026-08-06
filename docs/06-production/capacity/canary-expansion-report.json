@@ -1,0 +1,21 @@
+{
+  "scenario" : "CANARY-EXPANSION",
+  "stage" : 5,
+  "target" : 10000,
+  "success" : 10000,
+  "zeroOversell" : true,
+  "deadlocks" : 0,
+  "systemErrors" : 0,
+  "loadDurationMs" : 600069,
+  "produceQps" : 16.66,
+  "consumeConvergeMs" : 404,
+  "managerStage" : "CANARY_25",
+  "protocolReady" : true,
+  "executed" : true,
+  "environmentLimitation" : "single-machine shared host; produceQps 受压测客户端限制，不作为生产容量结论",
+  "codeDistribution" : {
+    "0" : 10000,
+    "30005" : 75418,
+    "EXCEPTION" : 720682
+  }
+}

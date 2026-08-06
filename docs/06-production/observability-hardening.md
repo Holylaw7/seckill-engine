@@ -4,6 +4,8 @@
 > Phase 6.6 补强：新增 gateway_rate_limit_total（限流告警别名）、inventory_repair_total（修复计数），
 > 并冻结 MQ 指标命名（rocketmq_consumer_lag / rocketmq_retry_total / rocketmq_dlq_total，生产侧由
 > RocketMQ exporter / Dashboard 接线）。
+> Phase 6.8 补强：新增 gateway_canary_weight / request_total / error_total / latency、
+> inventory_bucket_consistency_check_total、inventory_redis_consistency_fail_total（CRITICAL 报警）。
 
 ## 1. Metrics
 
@@ -16,6 +18,8 @@
 | gateway_429_total | Counter | ✅ |
 | gateway_rate_limit_total | Counter（429 别名，Phase 6.6） | ✅ |
 | gateway_error_total | Counter | ✅ |
+| gateway_canary_weight | Gauge（当前 canary 权重，Phase 6.8） | ✅ |
+| gateway_canary_request_total / error_total / latency | Counter / Counter / Timer（按 target 分桶，Phase 6.8） | ✅ |
 
 ### Seckill
 
@@ -36,6 +40,8 @@
 | inventory_recover_total | Counter | ✅ |
 | reconcile_diff_total | Counter（对账差异条数） | ✅ |
 | inventory_repair_total | Counter（admin repair 成功，Phase 6.6） | ✅ |
+| inventory_bucket_consistency_check_total | Counter（result=pass/fail，Phase 6.8） | ✅ |
+| inventory_redis_consistency_fail_total | Counter（ProductionRedisConsistencyJob CRITICAL，Phase 6.8） | ✅ |
 
 ### MQ（监控侧接线，Phase 6.6 冻结命名）
 
