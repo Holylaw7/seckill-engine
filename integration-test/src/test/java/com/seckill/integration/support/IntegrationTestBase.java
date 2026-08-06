@@ -110,9 +110,10 @@ public abstract class IntegrationTestBase extends AbstractIntegrationTest {
      */
     protected static void ensureRocketMqTopic() {
         try {
+            int brokerPort = Integer.getInteger("testcontainers.rocketmq.broker-port", 20911);
             ExecResult result = ROCKETMQ.execInContainer(
                     "sh", "-c",
-                    "sh mqadmin updateTopic -n 127.0.0.1:9876 -b 127.0.0.1:20911 "
+                    "sh mqadmin updateTopic -n 127.0.0.1:9876 -b 127.0.0.1:" + brokerPort + " "
                             + "-t seckill-order-tx");
             if (result.getExitCode() != 0) {
                 log.warn("rocketmq topic ensure exit={}, stdout={}, stderr={}",

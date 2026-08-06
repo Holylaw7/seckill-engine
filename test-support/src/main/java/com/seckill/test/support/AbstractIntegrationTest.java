@@ -51,12 +51,14 @@ public abstract class AbstractIntegrationTest {
      */
     protected static final GenericContainer<?> ROCKETMQ = new GenericContainer<>(
             DockerImageName.parse("apache/rocketmq:5.3.1"))
-            .withExposedPorts(9876, 20911)
+            .withExposedPorts(9876, ROCKETMQ_BROKER_PORT)
             .withCreateContainerCmdModifier(cmd -> cmd.getHostConfig().withPortBindings(
                     new PortBinding(Ports.Binding.bindPort(ROCKETMQ_NAMESRV_PORT), new ExposedPort(9876)),
-                    new PortBinding(Ports.Binding.bindPort(ROCKETMQ_BROKER_PORT), new ExposedPort(20911))))
+                    new PortBinding(Ports.Binding.bindPort(ROCKETMQ_BROKER_PORT),
+                            new ExposedPort(ROCKETMQ_BROKER_PORT))))
             .withCommand("sh", "-c",
-                    "printf 'brokerIP1=127.0.0.1\\nlistenPort=20911\\nautoCreateTopicEnable=true\\n' > /tmp/broker.conf; "
+                    "printf 'brokerIP1=127.0.0.1\\nlistenPort=" + ROCKETMQ_BROKER_PORT
+                            + "\\nautoCreateTopicEnable=true\\n' > /tmp/broker.conf; "
                             + "sh mqnamesrv & sleep 10; sh mqbroker -n 127.0.0.1:9876 -c /tmp/broker.conf & tail -f /dev/null")
             .waitingFor(Wait.forListeningPort())
             .withStartupTimeout(Duration.ofSeconds(300));
