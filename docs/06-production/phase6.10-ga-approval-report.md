@@ -102,7 +102,7 @@ Decision:  PASS
 | Commit | 内容 |
 | --- | --- |
 | `e938a4f` | test(release): add real canary window validation |
-| （待提交） | test(load): add L08 capacity validation |
-| （待提交） | docs(security): finalize dependency gate report |
-| （待提交） | docs(operation): add production signoff |
-| （待提交） | docs(release): phase6.10 GA approval report |
+| `452aafb` | test(load): add L08 capacity validation |
+| `6d8c624` | docs(security): finalize dependency gate report |
+| `f4e4c92` | docs(operation): add production signoff |
+| `eee0d1c` | docs(release): phase6.10 GA approval report |
