@@ -1,5 +1,8 @@
 package com.seckill.integration.support;
 
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
+
 import com.seckill.test.support.AbstractIntegrationTest;
 import io.lettuce.core.RedisClient;
 import io.lettuce.core.ScanArgs;
@@ -203,6 +206,37 @@ public abstract class IntegrationTestBase extends AbstractIntegrationTest {
     protected static int queryInt(String sql) throws Exception {
         String value = queryString(sql);
         return value == null ? -1 : Integer.parseInt(value);
+    }
+
+    // ==================== 连接池化轮询查询（Phase 6.24 / C1）====================
+    // 高频收敛轮询复用连接池，避免每次新建 JDBC 连接造成 Windows 临时端口耗尽。
+    // 默认行为不变：queryString/queryInt 仍每次新建连接；仅显式调用 pooledQueryInt 时走池。
+
+    private static volatile HikariDataSource queryPool;
+
+    protected static int pooledQueryInt(String sql) throws Exception {
+        HikariDataSource pool = queryPool;
+        if (pool == null) {
+            synchronized (IntegrationTestBase.class) {
+                if (queryPool == null) {
+                    HikariConfig config = new HikariConfig();
+                    config.setJdbcUrl(MYSQL.getJdbcUrl());
+                    config.setUsername(MYSQL.getUsername());
+                    config.setPassword(MYSQL.getPassword());
+                    config.setMaximumPoolSize(5);
+                    config.setMinimumIdle(1);
+                    config.setConnectionTimeout(5_000);
+                    config.setPoolName("integration-query-pool");
+                    queryPool = new HikariDataSource(config);
+                }
+                pool = queryPool;
+            }
+        }
+        try (Connection connection = pool.getConnection();
+             Statement statement = connection.createStatement();
+             ResultSet resultSet = statement.executeQuery(sql)) {
+            return resultSet.next() ? resultSet.getInt(1) : -1;
+        }
     }
 
     protected static String jdbcUrl(String schema) {

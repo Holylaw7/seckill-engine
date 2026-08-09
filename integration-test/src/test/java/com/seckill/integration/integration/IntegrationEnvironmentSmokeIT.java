@@ -16,6 +16,8 @@ class IntegrationEnvironmentSmokeIT extends IntegrationTestBase {
     void mysql_should_serve_five_service_schemas() throws Exception {
         // Act & Assert
         assertThat(queryInt("SELECT 1")).isEqualTo(1);
+        // Phase 6.24 C1：连接池化轮询查询冒烟
+        assertThat(pooledQueryInt("SELECT 1")).isEqualTo(1);
         for (String schema : SCHEMAS) {
             int tables = queryInt(
                     "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='" + schema + "'");
