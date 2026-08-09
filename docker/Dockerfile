@@ -10,11 +10,14 @@ COPY pom.xml .
 COPY seckill-common/pom.xml seckill-common/pom.xml
 COPY test-support/pom.xml test-support/pom.xml
 COPY gateway/pom.xml gateway/pom.xml
+COPY seckill-api/pom.xml seckill-api/pom.xml
 COPY auth-service/pom.xml auth-service/pom.xml
 COPY seckill-service/pom.xml seckill-service/pom.xml
 COPY inventory-service/pom.xml inventory-service/pom.xml
 COPY order-service/pom.xml order-service/pom.xml
 COPY payment-service/pom.xml payment-service/pom.xml
+COPY monitor/pom.xml monitor/pom.xml
+COPY integration-test/pom.xml integration-test/pom.xml
 RUN mvn -q -pl gateway,auth-service,seckill-service,inventory-service,order-service,payment-service \
     -am dependency:go-offline -DskipTests || true
 
