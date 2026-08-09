@@ -42,5 +42,5 @@ Reason: External Production Validation Environment Not Available
 
 | Commit | 内容 |
 | --- | --- |
-| （待提交） | docs(release): phase6.23 production validation evidence |
-| （待提交） | docs(release): phase6.23 final ga decision |
+| `51e987e` | docs(release): phase6.23 production validation evidence |
+| `6788bb3` | docs(release): phase6.23 final ga decision |
