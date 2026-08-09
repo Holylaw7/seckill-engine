@@ -36,3 +36,4 @@ Phase 6.21 在资源到位后执行独立生产验证。
 | `b75b277` | docs(release): phase6.20 external resource audit package |
 | `d85d22e` | docs(release): phase6.20 validation trigger package |
 | `dca99d7` | docs(release): phase6.20 ga blocker reassessment |
+| `accee1b` | docs(release): update phase6.20 commit list |
