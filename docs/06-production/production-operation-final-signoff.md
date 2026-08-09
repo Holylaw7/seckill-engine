@@ -1,6 +1,12 @@
 # Production Operation Final Sign-off
 
-> Phase 6.12 Task 5 — Close BLOCK-04
+> Phase 6.13 Task 5 — Close BLOCK-04
+
+## 状态
+
+```
+状态：PENDING（生产团队签署未完成）
+```
 
 ## 签署状态
 
