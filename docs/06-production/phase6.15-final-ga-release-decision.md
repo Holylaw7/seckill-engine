@@ -51,4 +51,4 @@ ANY FAIL / PENDING → RC1 STABLE
 
 | Commit | 内容 |
 | --- | --- |
-| （本报告） | docs(release): phase6.15 final ga release decision |
+| `3365151` | docs(release): phase6.15 final ga release decision |
