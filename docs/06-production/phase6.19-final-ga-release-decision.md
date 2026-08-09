@@ -33,5 +33,5 @@ canary weight 保持 0。
 
 | Commit | 内容 |
 | --- | --- |
-| （待提交） | docs(release): phase6.19 production validation evidence |
-| （待提交） | docs(release): phase6.19 final ga decision |
+| `65458bf` | docs(release): phase6.19 production validation evidence |
+| `f6a2448` | docs(release): phase6.19 final ga decision |
