@@ -4,6 +4,24 @@
 
 ---
 
+## 融合版（推荐，慢板结构 + 浓缩密度）
+
+**Seckill-Engine｜AI Agent 协同研发的高并发分布式秒杀交易系统**（分布式微服务 / 核心开发 · Java 21 · Spring Boot 3.2 · MySQL · Redis · RocketMQ）
+
+面向瞬时高并发、库存强一致和最终一致性场景，采用 AI Agent 驱动的软件工程流程，主导完成六服务秒杀系统（Gateway / auth / seckill / order / inventory / payment）的架构设计、技术方案、代码审查与全链路验证。
+
+**架构设计与工程协同**：基于 ADR 拆解服务边界、状态模型与一致性方案，AI Agent 辅助模块实现，人负责核心技术决策与 Review；全流程产出 220+ 可审计提交、10K+ 行文档，支持 Docker 一键部署与端到端演示。
+
+**库存一致性（防超卖）**：设计 Redis Lua 原子预扣减 + 异步落库架构，校验、扣减、防重复原子化；结合库存分桶 N=8 解除单 SKU 行锁热点（分桶消费 360 QPS）；E2E 10000 请求验证**零超卖、零死锁**，Redis==SUM(bucket)==MySQL。
+
+**最终一致性**：设计 RocketMQ 事务消息、stock_flow 唯一键幂等与 RECOVER 恢复流程；取消/超时回补后 Redis/MySQL 一致，灰度回滚 **RTO<5min**（实测毫秒级）。
+
+**自动化验证与容量工程**：建立 365 单测、22 集成测试类（真实中间件）、6 类故障演练与容量测试；隔离拓扑实测入口 741 QPS、Gateway 700-900 QPS、Lua 1847 QPS、Canary 113 万请求 error=0；配套 Canary 5→100 自动回滚、Prometheus/Grafana 与 CI 门禁。
+
+数据为隔离环境实测（全部报告归档），生产级验证如实标注 PENDING；可现场演示登录→秒杀→防重→支付→取消回补全链路。
+
+---
+
 ## 浓缩版（推荐投递，约 200 字）
 
 **Seckill-Engine｜AI Agent 协同研发的高并发分布式秒杀交易系统**（分布式微服务 / 核心开发 · Java 21 · Spring Boot 3.2 · MySQL · Redis · RocketMQ）
