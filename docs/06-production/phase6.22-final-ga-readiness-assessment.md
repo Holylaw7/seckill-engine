@@ -32,6 +32,6 @@ ANY FAIL / PENDING → RC1 STABLE
 
 | Commit | 内容 |
 | --- | --- |
-| （待提交） | docs(release): phase6.22 resource activation audit |
-| （待提交） | docs(release): phase6.22 validation window package |
-| （待提交） | docs(release): phase6.22 final ga assessment |
+| `c6bdd09` | docs(release): phase6.22 resource activation audit |
+| `002b8b5` | docs(release): phase6.22 validation window package |
+| `27d7cf8` | docs(release): phase6.22 final ga assessment |
