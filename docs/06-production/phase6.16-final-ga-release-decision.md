@@ -50,4 +50,4 @@ Dependency Scan → 独立 Load Generator → Production RocketMQ → E2E 50000
 
 | Commit | 内容 |
 | --- | --- |
-| （本报告） | docs(release): phase6.16 final ga release decision |
+| `268d93e` | docs(release): phase6.16 final ga release decision |
