@@ -1,6 +1,5 @@
 package com.seckill.integration.load;
 
-import com.seckill.integration.support.IntegrationTestBase;
 import org.apache.rocketmq.client.consumer.DefaultMQPushConsumer;
 import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyContext;
 import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyStatus;
@@ -34,14 +33,14 @@ import static org.awaitility.Awaitility.await;
 
 /**
  * Phase 6.12 Task 2 RocketMQ Capacity Probe：
- * 直接以事务消息压测单机 Testcontainers broker（独立于业务链路），
+ * 直接以事务消息压测独立 RocketMQ 拓扑（namesrv 与 broker 各自独立容器，Phase 6.14），
  * 量化 producer TPS / transaction latency / send failure（超时计数）/ consumer TPS / backlog 收敛。
  * 默认跳过（-Dload.enabled=true 执行）。
  */
 @LoadTest
 @Tag("load")
 @Tag("integration")
-class RocketMqCapacityProbeIT extends IntegrationTestBase {
+class RocketMqCapacityProbeIT {
 
     private static final Logger log = LoggerFactory.getLogger(RocketMqCapacityProbeIT.class);
     private static final String TOPIC = "capacity-probe-tx";
@@ -51,8 +50,20 @@ class RocketMqCapacityProbeIT extends IntegrationTestBase {
     void rocketMqTransactionCapacityProbe() throws Exception {
         int total = Integer.getInteger("rocketmq.probe.total", 5000);
         int concurrency = Integer.getInteger("rocketmq.probe.concurrency", 100);
-        String namesrv = ROCKETMQ.getHost() + ":" + ROCKETMQ.getMappedPort(9876);
+        RocketMqIndependentTopology topology = new RocketMqIndependentTopology(
+                Integer.getInteger("rocketmq.independent.namesrv-port", 39876),
+                Integer.getInteger("rocketmq.independent.broker-port", 40911));
+        topology.start();
+        try {
+            probe(topology, total, concurrency);
+        } finally {
+            topology.stop();
+        }
+    }
 
+    private static void probe(RocketMqIndependentTopology topology, int total, int concurrency)
+            throws Exception {
+        String namesrv = topology.namesrvAddr();
         // ===== Consumer 先行订阅（统计消费吞吐与收敛）=====
         AtomicLong consumed = new AtomicLong();
         DefaultMQPushConsumer consumer = new DefaultMQPushConsumer("capacity-probe-consumer");
@@ -71,7 +82,7 @@ class RocketMqCapacityProbeIT extends IntegrationTestBase {
         // ===== Producer 事务消息压测 =====
         TransactionMQProducer producer = new TransactionMQProducer("capacity-probe-producer");
         producer.setNamesrvAddr(namesrv);
-        producer.setSendMsgTimeout(3000);
+        producer.setSendMsgTimeout(10_000);
         producer.setTransactionListener(new TransactionListener() {
             @Override
             public LocalTransactionState executeLocalTransaction(Message msg, Object arg) {
@@ -84,6 +95,19 @@ class RocketMqCapacityProbeIT extends IntegrationTestBase {
             }
         });
         producer.start();
+
+        // 预热：等待 namesrv 路由就绪（broker boot success 后注册仍需要时间），预热消息不计入统计
+        boolean warmed = false;
+        for (int i = 0; i < 60 && !warmed; i++) {
+            try {
+                TransactionSendResult warm = producer.sendMessageInTransaction(
+                        new Message(TOPIC, TAG, "warm".getBytes(java.nio.charset.StandardCharsets.UTF_8)), null);
+                warmed = warm != null && warm.getSendStatus() != null;
+            } catch (Exception e) {
+                Thread.sleep(1000);
+            }
+        }
+        assertThat(warmed).as("rocketmq route not ready within 60s").isTrue();
 
         AtomicInteger sent = new AtomicInteger();
         AtomicInteger failed = new AtomicInteger();
@@ -131,7 +155,9 @@ class RocketMqCapacityProbeIT extends IntegrationTestBase {
         double seconds = loadNanos / 1_000_000_000.0;
         Map<String, Object> report = new LinkedHashMap<>();
         report.put("scenario", "ROCKETMQ-CAPACITY-PROBE");
-        report.put("environment", "single-host Testcontainers broker（namesrv+broker 单容器）");
+        report.put("environment", "independent containers（namesrv + broker 各自独立容器，Phase 6.14）");
+        report.put("topology", "namesrv=" + namesrv + " / broker=localhost:"
+                + Integer.getInteger("rocketmq.independent.broker-port", 40911));
         report.put("total", total);
         report.put("concurrency", concurrency);
         report.put("sent", sent.get());
