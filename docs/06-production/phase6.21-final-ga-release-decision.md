@@ -51,5 +51,5 @@ ANY FAIL / PENDING → RC1 STABLE
 
 | Commit | 内容 |
 | --- | --- |
-| （待提交） | docs(release): phase6.21 production admission evidence |
-| （待提交） | docs(release): phase6.21 final ga decision |
+| `1814b02` | docs(release): phase6.21 production admission evidence |
+| `b9bd294` | docs(release): phase6.21 final ga decision |
