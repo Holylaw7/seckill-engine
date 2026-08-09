@@ -1,6 +1,6 @@
 # Production Operation Final Sign-off
 
-> Phase 6.13 Task 5 — Close BLOCK-04
+> Phase 6.15 Task 6 — Close BLOCK-04
 
 ## 状态
 
@@ -27,4 +27,5 @@
 
 ## 结论
 
-**BLOCK-04 = PENDING**。工程证据齐备；真实签署须由生产运营团队完成。
+**BLOCK-04 = PENDING**。工程证据齐备（monitoring / alert / backup / rollback 演练 PASS）；
+真实签署须由生产运营团队完成。
