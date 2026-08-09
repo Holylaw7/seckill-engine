@@ -34,5 +34,5 @@ ANY FAIL / PENDING → RC1 STABLE
 
 | Commit | 内容 |
 | --- | --- |
-| （本报告） | docs(release): phase6.17 final validation evidence |
-| （本报告） | docs(release): phase6.17 final ga decision |
+| `86d1a20` | docs(release): phase6.17 final validation evidence |
+| `336e983` | docs(release): phase6.17 final ga decision |
