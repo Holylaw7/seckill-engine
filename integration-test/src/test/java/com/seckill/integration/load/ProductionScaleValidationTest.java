@@ -23,6 +23,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -204,8 +206,11 @@ class ProductionScaleValidationTest extends IntegrationTestBase {
     private static String[] loginAll() throws Exception {
         String[] tokens = new String[TARGET];
         for (int i = 0; i < TARGET; i++) {
-            Result<LoginResponse> login = TestHttp.login(gatewayBaseUrl,
-                    "l08user" + (BASE_USER + i), PASSWORD);
+            // Phase 6.14：HttpURLConnection 读超时在 Windows 上偶发失效，加 Future 强制超时快速失败
+            final int index = i;
+            Result<LoginResponse> login = CompletableFuture.supplyAsync(() ->
+                            TestHttp.login(gatewayBaseUrl, "l08user" + (BASE_USER + index), PASSWORD))
+                    .get(20, TimeUnit.SECONDS);
             if (login == null || login.getCode() != 0 || login.getData() == null
                     || login.getData().getToken() == null) {
                 throw new IllegalStateException("L-08 login failed at " + i);
