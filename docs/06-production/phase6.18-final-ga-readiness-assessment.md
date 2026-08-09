@@ -35,4 +35,4 @@ ANY FAIL / PENDING → RC1 STABLE
 | --- | --- |
 | `6cd24df` | docs(release): phase6.18 external validation readiness package |
 | `7aa556c` | test(load): harden validation client infrastructure |
-| （本报告） | docs(release): phase6.18 final ga blocking assessment |
+| `44028c0` | docs(release): phase6.18 final ga blocking assessment |
