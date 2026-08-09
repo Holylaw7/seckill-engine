@@ -56,6 +56,31 @@ docker compose -f docker/docker-compose.yml down -v     # 停止并清空数据
 
 首次构建约 5-15 分钟（拉依赖/镜像）；MySQL 首次启动执行 `sql/` 初始化脚本（含演示种子）。
 
+### 演示初始化（首次启动后执行一次）
+
+MySQL 种子仅含场次/SKU/库存汇总，**分桶行与演示用户需手动准备**：
+
+```bash
+# 1) 插入演示用户（密码 Test@123，hash 为 BCrypt 示例值）
+docker exec seckill-mysql-compose mysql -uroot -pseckill-root \
+  -e 'INSERT INTO seckill_auth.`user` (id, username, password_hash, status, roles)
+      VALUES (10001, "tester", "$2a$10$wIDa2z5fwwlfxInfI0rVEOWwsp3damWoubNwXRUyOUAmdlcZ/Io36", 1, "USER");'
+
+# 2) 插入 8 个分桶行（SKU 20001，每桶 125）
+docker exec seckill-mysql-compose mysql -uroot -pseckill-root \
+  -e 'INSERT INTO seckill_inventory.inventory_bucket
+      (id, sku_id, bucket_no, total_stock, locked_stock, available_stock, version)
+      VALUES (200011,20001,0,125,0,125,0),...,(200018,20001,7,125,0,125,0);'
+
+# 3) Redis 预热
+for i in $(seq 0 7); do docker exec seckill-redis-compose redis-cli SET seckill:stock:bucket:20001:$i 125; done
+docker exec seckill-redis-compose redis-cli SET seckill:stock:20001 1000
+docker exec seckill-redis-compose redis-cli SET seckill:stock:total:20001 1000
+```
+
+> 说明：生产环境应由分桶迁移服务（InventoryBucketMigrationService）自动执行，
+> 演示环境因容器内无迁移入口而手动准备。
+
 ---
 
 ## 4. 关键配置说明
