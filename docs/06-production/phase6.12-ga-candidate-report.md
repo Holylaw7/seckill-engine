@@ -43,4 +43,4 @@ Blocking items：E2E 50000 独立环境验证、CI dependency-scan 实际 GREEN�
 | Commit | 内容 |
 | --- | --- |
 | `0b1be30` | test(load): add rocketmq capacity probe |
-| （待提交） | docs(release): phase6.12 ga candidate report |
+| `9464bda` | docs(release): phase6.12 ga candidate report |
