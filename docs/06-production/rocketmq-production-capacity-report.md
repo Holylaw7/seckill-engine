@@ -14,6 +14,8 @@
 
 RocketMqCapacityProbeIT（100 并发 / 5000 条事务消息）：
 
+### 2026-08-06（Phase 6.12）
+
 ```
 environment:   single-host Testcontainers broker（namesrv+broker 单容器）
 sent:          3814 / 5000
@@ -26,6 +28,23 @@ DLQ count:     0
 conclusion:    SINGLE-HOST BROKER SATURATION
 ```
 
+### 2026-08-09（Docker 恢复后重跑，当前证据）
+
+```
+environment:   single-host Testcontainers broker（namesrv+broker 单容器）
+sent:          3848 / 5000
+failed:        1152（23.0%，send timeout）
+sendTps:       907.98
+sendP99Ms:     439.11
+transactionP99Ms: 312.39
+consumer TPS:  272.62
+backlog 收敛:   14,115ms
+DLQ count:     0
+conclusion:    SINGLE-HOST BROKER SATURATION（与 Phase 6.12 一致，稳定复现）
+```
+
+数据归档：`docs/06-production/capacity/rocketmq-capacity-probe-2026-08-09.json`
+
 ## 生产规格验收条件（未验证）
 
 ```
@@ -35,4 +54,4 @@ backlog eventually = 0
 producer TPS / transaction latency / consumer TPS / backlog curve
 ```
 
-**MQ Stability Gate = PENDING（生产规格验证未执行；单机证据表明容量瓶颈而非功能缺陷）**
+**MQ Stability Gate = PENDING（生产规格验证未执行；两次单机探针均证实容量瓶颈而非功能缺陷）**

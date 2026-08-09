@@ -1,0 +1,15 @@
+{
+  "scenario" : "ROCKETMQ-CAPACITY-PROBE",
+  "environment" : "single-host Testcontainers broker（namesrv+broker 单容器）",
+  "total" : 5000,
+  "concurrency" : 100,
+  "sent" : 3848,
+  "failed" : 1152,
+  "sendTps" : 907.98,
+  "sendP99Ms" : 439.11,
+  "transactionP99Ms" : 312.39,
+  "consumeTps" : 272.62,
+  "backlogConvergeMs" : 14115,
+  "dlqCount" : 0,
+  "conclusion" : "SINGLE-HOST BROKER SATURATION（发送失败/超时存在，与 Phase 6.11 根因一致）"
+}

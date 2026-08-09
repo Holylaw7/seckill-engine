@@ -35,6 +35,24 @@ duplicate safe / recovery: 历史证据保持（L-07 / FullRollback Drill）
 
 **BLOCK-03 = NOT PASS（独立环境未执行，禁止虚报）**
 
+## 2026-08-09 重跑记录（Docker 恢复后，当前证据）
+
+```
+执行：ProductionScaleValidationTest -Dl08.success-target=5000（小档冒烟）
+结果：NOT COMPLETED —— 卡在登录阶段
+定位（jstack）：
+  - surefire 主线程阻塞在 TestHttp.login 等待响应；
+  - auth 服务 http-nio-18081-exec-9 卡在 BCrypt.checkpw（AuthServiceImpl.login:52）
+    持续 363 秒未返回（正常 <100ms）；
+  - MySQL 无活跃查询，非 SQL 死锁；属运行时环境异常（CPU/熵源争用）。
+结论：即使 Docker 恢复，单机环境仍出现运行时异常卡顿；
+      独立 Load Generator / 生产规格 RocketMQ 条件仍不满足，
+      E2E 50000 独立验证保持 NOT PASS（未执行）。
+```
+
+同期 MQ 探针（Docker 恢复后）：sent=3848/5000、failed=1152（23.0%），
+单机 broker 饱和稳定复现（见 rocketmq-production-capacity-report.md）。
+
 ## 独立环境执行指引（资产已就绪，Phase 6.11/6.12 完成）
 
 ```
