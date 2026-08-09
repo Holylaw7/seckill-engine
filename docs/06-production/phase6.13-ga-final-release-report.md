@@ -50,5 +50,5 @@ Blocking items（保持未关闭）：
 
 | Commit | 内容 |
 | --- | --- |
-| （待提交） | docs(release): phase6.13 blocking evidence |
-| （待提交） | docs(release): phase6.13 final ga release decision |
+| `e536f50` | docs(release): phase6.13 blocking evidence |
+| `5c81325` | docs(release): phase6.13 final ga release decision |
