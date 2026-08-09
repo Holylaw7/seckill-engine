@@ -4,6 +4,22 @@
 
 ---
 
+## 浓缩版（推荐投递，约 200 字）
+
+**Seckill-Engine｜AI Agent 协同研发的高并发分布式秒杀交易系统**（分布式微服务 / 核心开发 · Java 21 · Spring Boot 3.2 · MySQL · Redis · RocketMQ）
+
+主导六服务秒杀系统架构、实现与全链路验证：基于 ADR 冻结服务边界与一致性方案，AI Agent 辅助编码、人负责核心决策与 Review；220+ 可审计提交、365 单测、22 集成、6 故障演练全绿。
+
+- **防超卖**：Redis Lua 原子预扣减 + 库存分桶 N=8 解除单行锁热点，E2E 10000 请求**零超卖、零死锁**，Redis==SUM(bucket)==MySQL；
+- **最终一致**：RocketMQ 事务消息 + stock_flow 唯一键幂等 + RECOVER 回补，取消后 Redis/MySQL 一致，灰度回滚 **RTO<5min**；
+- **容量与工程**：入口 741 QPS / Gateway 700-900 QPS / Lua 1847 QPS / Canary 113 万请求 error=0；Canary 5→100 自动回滚、Prometheus/Grafana、CI 门禁、Docker 一键演示。
+
+数据为隔离环境实测（报告归档），生产级验证如实标注 PENDING，可现场演示登录→秒杀→防重→支付→取消回补全链路。
+
+---
+
+## 完整版
+
 ## 简历条目
 
 **Seckill-Engine｜AI Agent 协同研发的高并发分布式秒杀交易系统**（分布式高并发微服务 / 核心开发）
