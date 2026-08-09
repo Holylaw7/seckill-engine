@@ -73,6 +73,16 @@ public final class TestHttp {
     public static Result<ExecuteResponse> executeWithAuth(String baseUrl, long userId,
                                                           long sessionId, long skuId,
                                                           int quantity, String traceId, String token) {
+        return executeWithAuth(REST, baseUrl, userId, sessionId, skuId,
+                quantity, traceId, token);
+    }
+
+    /**
+     * Phase 6.18：允许压测客户端传入连接复用 RestTemplate（缓解 Windows 临时端口耗尽）。
+     */
+    public static Result<ExecuteResponse> executeWithAuth(RestTemplate rest, String baseUrl, long userId,
+                                                          long sessionId, long skuId,
+                                                          int quantity, String traceId, String token) {
         ExecuteRequest request = new ExecuteRequest();
         request.setSessionId(sessionId);
         request.setSkuId(skuId);
@@ -81,7 +91,7 @@ public final class TestHttp {
         if (token != null && !token.isBlank()) {
             headers.setBearerAuth(token);
         }
-        return REST.exchange(baseUrl + "/api/v1/seckill/execute", HttpMethod.POST,
+        return rest.exchange(baseUrl + "/api/v1/seckill/execute", HttpMethod.POST,
                 new HttpEntity<>(request, headers),
                 new ParameterizedTypeReference<Result<ExecuteResponse>>() {
                 }).getBody();

@@ -1,0 +1,22 @@
+{
+  "scenario" : "L-08",
+  "target" : 1000,
+  "stock" : 2000,
+  "success" : 1000,
+  "zeroOversell" : true,
+  "deadlocks" : 0,
+  "loadDurationMs" : 13153,
+  "produceQps" : 76.03,
+  "consumeConvergeMs" : 1010,
+  "consumeTps" : 990.1,
+  "rowLockWaitsDelta" : 555,
+  "bucketCount" : 8,
+  "mqBacklogZero" : true,
+  "duplicateSafe" : true,
+  "recoverSample" : 50,
+  "dlqCheck" : "monitoring-side（backlog=0 且消费无重试耗尽；生产由 rocketmq_dlq_total 确认）",
+  "environmentLimitation" : "single-machine isolated topology; produceQps 受压测客户端限制，不作为生产容量结论",
+  "codeDistribution" : {
+    "0" : 1000
+  }
+}

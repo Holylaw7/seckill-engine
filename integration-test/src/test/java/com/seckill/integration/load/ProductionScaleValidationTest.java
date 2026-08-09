@@ -14,8 +14,14 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
+import org.springframework.web.client.RestTemplate;
 
 import java.time.Duration;
+import java.net.http.HttpClient;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -60,6 +66,10 @@ class ProductionScaleValidationTest extends IntegrationTestBase {
     private static final List<String> SUCCESS_ORDER_IDS = Collections.synchronizedList(new ArrayList<>());
     private static final AtomicInteger REQUEST_COUNTER = new AtomicInteger();
 
+    // Phase 6.18：连接复用压测客户端（JDK HttpClient），缓解 Windows 临时端口耗尽
+    private static final RestTemplate LOAD_REST = new RestTemplate(new JdkClientHttpRequestFactory(
+            HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build()));
+
     @BeforeAll
     static void startTopology() throws Exception {
         TARGET = Integer.getInteger("l08.success-target", DEFAULT_TARGET);
@@ -100,9 +110,13 @@ class ProductionScaleValidationTest extends IntegrationTestBase {
             int userIndex = REQUEST_COUNTER.getAndIncrement() % TARGET;
             long userId = BASE_USER + userIndex;
             try {
-                Result<ExecuteResponse> response = TestHttp.executeWithAuth(
-                        gatewayBaseUrl, userId, SESSION_ID, SKU_ID, 1,
-                        "l08-" + RUN_ID + "-" + System.nanoTime(), TOKENS[userIndex]);
+                final int user = userIndex;
+                Result<ExecuteResponse> response = CompletableFuture.supplyAsync(() ->
+                                TestHttp.executeWithAuth(LOAD_REST, gatewayBaseUrl, userId,
+                                        SESSION_ID, SKU_ID, 1,
+                                        "l08-" + RUN_ID + "-" + System.nanoTime(),
+                                        TOKENS[user]))
+                        .get(30, TimeUnit.SECONDS);
                 int code = response == null ? -1 : response.getCode();
                 codes.merge(String.valueOf(code), 1, Integer::sum);
                 if (code == 0) {
@@ -125,10 +139,17 @@ class ProductionScaleValidationTest extends IntegrationTestBase {
 
         // MQ 收敛：订单数 == DEDUCT 流水数（backlog=0）
         long convergeStart = System.nanoTime();
-        await().atMost(Duration.ofMinutes(30)).untilAsserted(() -> {
-            assertThat(TestDataHelper.countOrders(SESSION_ID, SKU_ID)).isEqualTo(TARGET);
-            assertThat(TestDataHelper.countDeductFlow(SKU_ID)).isEqualTo(TARGET);
-        });
+        // Phase 6.18：收敛轮询复用单一 JDBC 连接，避免高频短连接加剧端口耗尽
+        try (Connection convergence = openConnection()) {
+            await().atMost(Duration.ofMinutes(30)).untilAsserted(() -> {
+                assertThat(countOn(convergence,
+                        "SELECT COUNT(*) FROM seckill_order.seckill_order WHERE session_id=" + SESSION_ID))
+                        .isEqualTo(TARGET);
+                assertThat(countOn(convergence,
+                        "SELECT COUNT(*) FROM seckill_inventory.stock_flow WHERE sku_id=" + SKU_ID
+                                + " AND change_type='DEDUCT'")).isEqualTo(TARGET);
+            });
+        }
         long convergeMs = (System.nanoTime() - convergeStart) / 1_000_000;
 
         // 零超卖 + 不变量 + 分桶口径（分桶模式下 inventory 为汇总行，实时口径看 bucket SUM）
@@ -201,6 +222,13 @@ class ProductionScaleValidationTest extends IntegrationTestBase {
         String value = queryString("SELECT VARIABLE_VALUE FROM performance_schema.global_status "
                 + "WHERE VARIABLE_NAME='" + name + "'");
         return value == null ? -1 : Long.parseLong(value);
+    }
+
+    private static long countOn(Connection connection, String sql) throws Exception {
+        try (Statement statement = connection.createStatement();
+             ResultSet resultSet = statement.executeQuery(sql)) {
+            return resultSet.next() ? resultSet.getLong(1) : -1;
+        }
     }
 
     private static String[] loginAll() throws Exception {
