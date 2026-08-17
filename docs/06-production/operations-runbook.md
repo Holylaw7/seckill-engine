@@ -47,6 +47,8 @@ mvn -pl integration-test -am test -Dtest=SeckillFullFlowIT
 ## 3. Docker 一键部署（演示环境）
 
 ```bash
+# 可选：先复制并修改环境变量（PowerShell 可用 Copy-Item .env.example .env）
+cp .env.example .env
 docker compose -f docker/docker-compose.yml up -d --build
 docker compose -f docker/docker-compose.yml ps          # 查看状态
 docker compose -f docker/docker-compose.yml logs -f     # 查看日志
@@ -55,6 +57,12 @@ docker compose -f docker/docker-compose.yml down -v     # 停止并清空数据
 ```
 
 首次构建约 5-15 分钟（拉依赖/镜像）；MySQL 首次启动执行 `sql/` 初始化脚本（含演示种子）。
+Compose 会等待 MySQL、Redis、RocketMQ namesrv/broker 的健康检查通过后再启动业务服务。
+MySQL、Redis 和 RocketMQ broker 数据分别保存在命名卷中；删除卷前必须确认已完成备份。
+
+默认环境变量见仓库根目录 `.env.example`。默认值仅服务于本地演示，至少应替换：
+`MYSQL_ROOT_PASSWORD`、`SECKILL_JWT_SECRET`、`ORDER_SERVICE_SECRET`、
+`INVENTORY_SERVICE_SECRET`、`INTERNAL_ADMIN_SECRET` 和 `CANARY_CONTROL_TOKEN`。
 
 ### 演示初始化（首次启动后执行一次）
 
@@ -219,17 +227,24 @@ Grafana：       docs/06-production/grafana/seckill-production-overview.json
 curl http://localhost:8085/api/v1/inventory/admin/reconcile?skuId=20001 \
   -H "X-Service-Name: admin" \
   -H "X-Service-Timestamp: $(date +%s%3N)" \
-  -H "X-Service-Signature: <HMAC-SHA256(admin:timestamp, dev-admin-secret)>"
+  -H "X-Service-Nonce: $(uuidgen | tr -d '-')" \
+  -H "X-Service-Signature: <HMAC-SHA256(admin:timestamp:nonce, dev-admin-secret)>"
 ```
 
 ### Redis 预热（key 丢失恢复）
 
-```bash
-# 按 MySQL 重建：全局 stock + 分桶 key（由对账/预热脚本执行）
-redis-cli SET seckill:stock:20001 1000
-redis-cli SET seckill:stock:total:20001 1000
-# 分桶 key：seckill:stock:bucket:20001:{0..7}
-```
+Redis AOF 只降低正常重启的数据丢失窗口，不能替代业务恢复流程。发现 key 丢失或
+对账不一致时，先暂停入口流量，再按以下顺序执行：
+
+1. 以 MySQL `inventory.available_stock` 和 `inventory_bucket.available_stock` 为准重建
+   global、total、bucket key；禁止用 `total_stock` 覆盖 `available_stock`；
+2. 调用 `GET /api/v1/inventory/admin/reconcile?skuId=...` 检查
+   `Redis.available == SUM(bucket.available) == inventory.available`；
+3. 差异经审批后调用 `/api/v1/inventory/admin/reconcile/repair`，保留 REPAIR 流水；
+4. 对账通过后恢复流量，并观察 `inventory_redis_consistency_fail_total`。
+
+完整断言见 `docs/06-production/recovery-drill-report.md` 和
+`BackupRecoveryDrillIT.redisKeyLossPreheatAndReconcile`。
 
 ### 慢 SQL
 
@@ -253,7 +268,8 @@ WHERE start_time >= NOW() - INTERVAL 1 HOUR ORDER BY query_time DESC LIMIT 50;
 
 ## 10. 故障恢复
 
-- Redis key 丢失：预热 + 对账 + repair（REPAIR 流水留痕）；
+- Redis 普通重启：AOF `everysec` + `redis-data` 卷恢复；Redis 全量丢失：
+  MySQL `available_stock` 预热 + 对账 + repair（REPAIR 流水留痕）；
 - MQ consumer 崩溃：重启后积压自动消费，重复消息只生效一次；
 - 库存差异：`/api/v1/inventory/admin/reconcile/repair`（仅 admin）；
 - 混沌演练：docs/06-production/recovery-drill-report.md、rollback-drill-report.md。

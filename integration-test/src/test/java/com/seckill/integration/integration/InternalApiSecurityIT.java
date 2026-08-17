@@ -22,6 +22,7 @@ import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -49,25 +50,40 @@ class InternalApiSecurityIT extends IntegrationTestBase {
                     + "\"sessionId\":97001,\"recoverCount\":1}";
 
             // 未授权：401
-            ResponseEntity<String> unauthorized = post(url, body, null, null, null);
+            ResponseEntity<String> unauthorized = post(url, body, null, null, null, null);
             assertThat(unauthorized.getStatusCode().value()).isEqualTo(401);
 
             // 错误服务：order-service 签名访问 recover → 403
             String ts = String.valueOf(System.currentTimeMillis());
-            String orderSig = InternalSignature.sign("dev-order-secret", "order-service:" + ts);
-            assertThat(post(url, body, "order-service", ts, orderSig).getStatusCode().value())
+            String orderNonce = UUID.randomUUID().toString().replace("-", "");
+            String orderSig = InternalSignature.sign("dev-order-secret", "order-service", ts, orderNonce);
+            assertThat(post(url, body, "order-service", ts, orderNonce, orderSig).getStatusCode().value())
                     .isEqualTo(403);
 
             // 授权：inventory-service → 200
             String validTs = String.valueOf(System.currentTimeMillis());
+            String validNonce = UUID.randomUUID().toString().replace("-", "");
             String validSig = InternalSignature.sign("dev-inventory-secret",
-                    "inventory-service:" + validTs);
-            ResponseEntity<String> ok = post(url, body, "inventory-service", validTs, validSig);
+                    "inventory-service", validTs, validNonce);
+            ResponseEntity<String> ok = post(url, body, "inventory-service", validTs, validNonce, validSig);
             assertThat(ok.getStatusCode().value()).isEqualTo(200);
             assertThat(ok.getBody()).contains("\"code\":0");
 
-            // 重放：同一时间戳+签名 → 401
-            ResponseEntity<String> replay = post(url, body, "inventory-service", validTs, validSig);
+            // 同一时间戳下使用不同 nonce 仍是两个合法并发请求
+            redisSet("seckill:stock:97002", "99");
+            redisSet("seckill:stock:total:97002", "100");
+            String concurrentBody = "{\"requestId\":\"drill-recover-2\",\"skuId\":97002,"
+                    + "\"sessionId\":97002,\"recoverCount\":1}";
+            String concurrentNonce = UUID.randomUUID().toString().replace("-", "");
+            String concurrentSig = InternalSignature.sign("dev-inventory-secret",
+                    "inventory-service", validTs, concurrentNonce);
+            ResponseEntity<String> concurrent = post(url, concurrentBody, "inventory-service",
+                    validTs, concurrentNonce, concurrentSig);
+            assertThat(concurrent.getStatusCode().value()).isEqualTo(200);
+
+            // 重放：同一 nonce + 签名 → 401
+            ResponseEntity<String> replay = post(url, body, "inventory-service",
+                    validTs, validNonce, validSig);
             assertThat(replay.getStatusCode().value()).isEqualTo(401);
         } finally {
             seckill.stop();
@@ -76,12 +92,13 @@ class InternalApiSecurityIT extends IntegrationTestBase {
     }
 
     private static ResponseEntity<String> post(String url, String body, String name,
-                                               String timestamp, String signature) {
+                                               String timestamp, String nonce, String signature) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         if (name != null) {
             headers.set("X-Service-Name", name);
             headers.set("X-Service-Timestamp", timestamp);
+            headers.set("X-Service-Nonce", nonce);
             headers.set("X-Service-Signature", signature);
         }
         return REST.exchange(url, HttpMethod.POST, new HttpEntity<>(body, headers), String.class);

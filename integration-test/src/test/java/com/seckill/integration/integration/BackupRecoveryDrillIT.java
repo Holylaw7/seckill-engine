@@ -96,7 +96,7 @@ class BackupRecoveryDrillIT extends IntegrationTestBase {
                 "--inventory.sharding.bucket-count=4");
         inventory.context().getBean(InventoryBucketMigrationService.class)
                 .migrate(SKU_ID, 1000, 4, false);
-        String orderId = "REC-ORDER-1";
+        String orderId = "960000000001";
         String body = TestHttp.createOrderMessageJson("REC-MSG-1", 960001L, 96001L,
                 SKU_ID, orderId, 1, 9900L, "recovery-drill", 0);
         sendCreate(body);

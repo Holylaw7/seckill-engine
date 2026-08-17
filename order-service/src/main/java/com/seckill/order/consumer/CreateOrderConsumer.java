@@ -27,8 +27,9 @@ public class CreateOrderConsumer implements RocketMQListener<String> {
 
     @Override
     public void onMessage(String payload) {
-        CreateOrderMessage message = JsonUtils.fromJson(payload, CreateOrderMessage.class);
+        CreateOrderMessage message = null;
         try {
+            message = JsonUtils.fromJson(payload, CreateOrderMessage.class);
             SeckillOrder order = orderService.createOrder(message);
             if (order != null) {
                 boolean confirmed = preDeductConfirmClient.confirm(
@@ -39,9 +40,10 @@ public class CreateOrderConsumer implements RocketMQListener<String> {
                 }
             }
         } catch (BusinessException e) {
-            // 数据异常（缺金额/流转失败）：告警不重试，避免死循环
+            // JSON/业务数据异常：告警并 ACK，避免 poison message 无限重试。
             log.error("order create failed, orderId={}, code={}, message={}",
-                    message.getOrderId(), e.getErrorCode().getCode(), e.getMessage());
+                    message == null ? null : message.getOrderId(),
+                    e.getErrorCode().getCode(), e.getMessage());
         }
     }
 }

@@ -12,6 +12,8 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
+import java.util.UUID;
+
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -30,13 +32,15 @@ public class RestPreDeductConfirmClient implements PreDeductConfirmClient {
     public boolean confirm(String messageId, String orderId) {
         try {
             String timestamp = String.valueOf(System.currentTimeMillis());
+            String nonce = UUID.randomUUID().toString().replace("-", "");
             Result<Void> result = preDeductConfirmRestClient.post()
                     .uri(properties.getPreDeductConfirm().getPath())
                     .contentType(MediaType.APPLICATION_JSON)
                     .header("X-Service-Name", clientName)
                     .header("X-Service-Timestamp", timestamp)
+                    .header("X-Service-Nonce", nonce)
                     .header("X-Service-Signature",
-                            InternalSignature.sign(clientSecret, clientName + ":" + timestamp))
+                            InternalSignature.sign(clientSecret, clientName, timestamp, nonce))
                     .body(new PreDeductConfirmRequest(messageId, orderId))
                     .retrieve()
                     .body(new ParameterizedTypeReference<Result<Void>>() {

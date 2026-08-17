@@ -140,6 +140,31 @@ class OrderServiceImplTest {
     }
 
     @Test
+    void createOrderInvalidOrderIdShouldRejectBeforeIdempotencyInsert() {
+        CreateOrderMessage message = message();
+        message.setOrderId("REC-ORDER-1");
+
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> orderService.createOrder(message));
+
+        assertEquals(ErrorCode.PARAM_ERROR, e.getErrorCode());
+        verify(idempotentMapper, never()).insert(any(Idempotent.class));
+        verify(orderMapper, never()).insert(any(SeckillOrder.class));
+    }
+
+    @Test
+    void createOrderInvalidQuantityShouldRejectBeforeIdempotencyInsert() {
+        CreateOrderMessage message = message();
+        message.setQuantity(0);
+
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> orderService.createOrder(message));
+
+        assertEquals(ErrorCode.PARAM_ERROR, e.getErrorCode());
+        verify(idempotentMapper, never()).insert(any(Idempotent.class));
+    }
+
+    @Test
     void paySuccessShouldTransitionWaitPayOrder() {
         when(orderMapper.selectOne(any())).thenReturn(waitPayOrder());
         when(orderMapper.update(isNull(), any())).thenReturn(1);

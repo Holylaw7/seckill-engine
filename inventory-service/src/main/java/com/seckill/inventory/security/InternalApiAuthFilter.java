@@ -20,6 +20,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 库存管理接口 ACL（Phase 6.6）：
+ * X-Service-Name / X-Service-Timestamp / X-Service-Nonce / X-Service-Signature
+ * 校验 + 时间窗 + 防重放。
  * /admin/reconcile（查询 diff）允许 inventory-service 或 admin；
  * /admin/reconcile/repair、syncSummary 仅允许 admin。
  */
@@ -29,6 +31,7 @@ public class InternalApiAuthFilter extends OncePerRequestFilter {
 
     private static final String NAME_HEADER = "X-Service-Name";
     private static final String TIMESTAMP_HEADER = "X-Service-Timestamp";
+    private static final String NONCE_HEADER = "X-Service-Nonce";
     private static final String SIGNATURE_HEADER = "X-Service-Signature";
     private static final long NONCE_TTL_MILLIS = 60_000L;
     private static final int MAX_NONCES = 10000;
@@ -51,8 +54,10 @@ public class InternalApiAuthFilter extends OncePerRequestFilter {
         }
         String name = request.getHeader(NAME_HEADER);
         String timestamp = request.getHeader(TIMESTAMP_HEADER);
+        String nonce = request.getHeader(NONCE_HEADER);
         String signature = request.getHeader(SIGNATURE_HEADER);
-        if (name == null || timestamp == null || signature == null) {
+        if (name == null || name.isBlank() || timestamp == null
+                || nonce == null || nonce.isBlank() || nonce.length() > 128 || signature == null) {
             writeError(response, HttpServletResponse.SC_UNAUTHORIZED, ErrorCode.UNAUTHORIZED);
             return;
         }
@@ -67,7 +72,15 @@ public class InternalApiAuthFilter extends OncePerRequestFilter {
             writeError(response, HttpServletResponse.SC_UNAUTHORIZED, ErrorCode.UNAUTHORIZED);
             return;
         }
-        String nonceKey = name + ":" + timestamp;
+        String secret = "admin".equals(name) ? properties.getAdminSecret()
+                : properties.getClients().get(name);
+        boolean sigOk = secret != null && !secret.isBlank()
+                && InternalSignature.verify(secret, name, timestamp, nonce, signature);
+        if (!sigOk) {
+            writeError(response, HttpServletResponse.SC_FORBIDDEN, ErrorCode.FORBIDDEN);
+            return;
+        }
+        String nonceKey = name + ":" + nonce;
         Long previous = nonces.putIfAbsent(nonceKey, System.currentTimeMillis());
         if (previous != null) {
             writeError(response, HttpServletResponse.SC_UNAUTHORIZED, ErrorCode.UNAUTHORIZED);
@@ -75,14 +88,6 @@ public class InternalApiAuthFilter extends OncePerRequestFilter {
         }
         trimNonces();
 
-        String secret = "admin".equals(name) ? properties.getAdminSecret()
-                : properties.getClients().get(name);
-        boolean sigOk = secret != null && !secret.isBlank()
-                && InternalSignature.verify(secret, name + ":" + timestamp, signature);
-        if (!sigOk) {
-            writeError(response, HttpServletResponse.SC_FORBIDDEN, ErrorCode.FORBIDDEN);
-            return;
-        }
         String path = request.getRequestURI();
         boolean adminOnly = path.contains("/reconcile/repair") || path.contains("/syncSummary");
         boolean allowed = adminOnly ? "admin".equals(name)

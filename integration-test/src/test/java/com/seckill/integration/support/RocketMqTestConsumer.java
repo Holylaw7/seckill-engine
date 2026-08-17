@@ -40,6 +40,9 @@ public final class RocketMqTestConsumer implements AutoCloseable {
             return ConsumeConcurrentlyStatus.CONSUME_SUCCESS;
         });
         consumer.start();
+        await().atMost(Duration.ofSeconds(30))
+                .pollInterval(Duration.ofMillis(200))
+                .until(() -> !consumer.fetchSubscribeMessageQueues(topic).isEmpty());
         return new RocketMqTestConsumer(consumer, queue);
     }
 

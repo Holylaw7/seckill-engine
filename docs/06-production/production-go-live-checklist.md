@@ -12,7 +12,7 @@
 
 ## Security
 
-- [x] 内部接口 Service ACL（X-Service-Name/Timestamp/Signature + 时间窗 + 防重放）
+- [x] 内部接口 Service ACL（X-Service-Name/Timestamp/Nonce/Signature + 时间窗 + 防重放）
   - [x] recover：仅 inventory-service
   - [x] pre-deduct confirm：仅 order-service
   - [x] reconciliation：inventory-service / admin

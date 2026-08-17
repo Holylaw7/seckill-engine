@@ -15,6 +15,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -67,6 +68,15 @@ class CreateOrderConsumerTest {
         doThrow(new BusinessException(ErrorCode.PARAM_ERROR, "消息缺少金额快照"))
                 .when(orderService).createOrder(any());
         newConsumer().onMessage(payload());
+    }
+
+    @Test
+    void malformedJsonShouldBeAckedWithoutRetry() {
+        doThrow(new BusinessException(ErrorCode.JSON_ERROR, "消息格式错误"))
+                .when(orderService).createOrder(isNull(CreateOrderMessage.class));
+
+        newConsumer().onMessage("null");
+        verify(orderService).createOrder(isNull(CreateOrderMessage.class));
     }
 
     @Test

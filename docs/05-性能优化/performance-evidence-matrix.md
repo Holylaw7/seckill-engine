@@ -12,8 +12,9 @@
 | Docker Engine | 29.7.2，API 1.55 |
 | 集成中间件 | MySQL 8.0.36、Redis 7.2.4、RocketMQ 5.3.1 |
 | Java | Maven 测试日志使用 JDK 21.0.12 |
-| 测试性质 | 本机或隔离拓扑，不能替代生产容量门禁 |
+| 测试性质 | 本机或隔离拓扑，不能替代生产容量门禁；Docker Compose 运行验证只证明启动/恢复行为，不证明生产吞吐 |
 | 当前回归 | `PaymentCallbackFlowIT` 4/4、`BackupRecoveryDrillIT` 2/2 |
+| 压测开关 | 所有 `@LoadTest` 默认跳过；必须显式传 `-Dload.enabled=true`，跳过不计入 PASS/FAIL |
 
 ## 2. 已有性能证据
 
@@ -62,3 +63,17 @@
 5. 以错误率、P99、库存不变量、超卖数和重复订单数共同决定是否通过；
 6. 记录瓶颈归因和优化前后对比，再更新本矩阵，不覆盖历史实验结果。
 
+## 6. 可复现执行约束
+
+```text
+普通回归：mvn test
+定向容量：mvn -pl integration-test -am test -Dtest=<LoadTest>
+             -Dload.enabled=true
+独立 MQ：  -Drocketmq.probe.total=<N>
+             -Drocketmq.probe.concurrency=<N>
+E2E 档位：  -Dl08.success-target=10000|50000|100000
+```
+
+`@LoadTest` 的条件跳过是资源保护措施，不是测试失败。每次压测报告必须同时记录：
+命令行、Git commit、JDK/Docker/镜像版本、并发、总请求数、持续时间、客户端是否独立、
+资源时间序列和失败原因；未实际执行的档位继续标记 `NOT RUN` 或 `PENDING`。

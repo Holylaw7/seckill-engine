@@ -30,6 +30,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * 集成测试 HTTP 客户端：秒杀、支付、订单取消、回调签名。
@@ -173,10 +174,12 @@ public final class TestHttp {
     public static Result<ReconcileReport> reconcile(String baseUrl, long skuId) {
         HttpHeaders headers = new HttpHeaders();
         String timestamp = String.valueOf(System.currentTimeMillis());
+        String nonce = UUID.randomUUID().toString().replace("-", "");
         headers.set("X-Service-Name", "admin");
         headers.set("X-Service-Timestamp", timestamp);
+        headers.set("X-Service-Nonce", nonce);
         headers.set("X-Service-Signature",
-                InternalSignature.sign("dev-admin-secret", "admin:" + timestamp));
+                InternalSignature.sign("dev-admin-secret", "admin", timestamp, nonce));
         return REST.exchange(baseUrl + "/api/v1/inventory/admin/reconcile?skuId=" + skuId, HttpMethod.GET,
                 new HttpEntity<>(headers), new ParameterizedTypeReference<Result<ReconcileReport>>() {
                 }).getBody();

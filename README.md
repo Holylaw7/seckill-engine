@@ -126,11 +126,15 @@ docker compose -f docker/docker-compose.yml up -d --build
 # 首次构建需联网拉取 Maven 依赖与镜像
 ```
 
+可选：复制 `.env.example` 为 `.env`，替换数据库密码、JWT、内部接口和 Canary 控制密钥。
+Compose 默认创建 MySQL 数据卷、Redis AOF 数据卷和 RocketMQ broker store/logs 数据卷；
+`docker compose down` 保留数据，`down -v` 才会清空数据。
+
 启动后：
 
 ```text
 Gateway    http://localhost:8080
-MySQL      127.0.0.1:3306（root/seckill-root）
+MySQL      127.0.0.1:3306（root/由 MYSQL_ROOT_PASSWORD 决定，默认 seckill-root）
 Redis      127.0.0.1:6379
 RocketMQ   9876（namesrv）/ 10911（broker）
 ```
@@ -169,7 +173,7 @@ mvn -pl integration-test -am test -Dtest=ProductionScaleValidationTest \
 ## 七、已知限制
 
 - `REFUND_SUCCESS` 到 order-service `REFUND` 的事件闭环尚未接入，退款仍是后续工作；
-- Redis 无持久化：恢复依赖预热 + 对账 + repair（本次已按 `available_stock` 演练）；
+- Docker 演示环境已开启 Redis AOF `everysec`，但 Redis 仍不是库存最终事实源；全量丢失仍必须按 MySQL `available_stock` 预热、对账后放量；
 - recover 契约无 userId（登记项）；
 - 混沌全量同 JVM 连续执行存在 MQ 收敛级联伪影（生产演练按类隔离执行）；
 - 演示部署使用 root 账号与演示密钥，生产必须替换。

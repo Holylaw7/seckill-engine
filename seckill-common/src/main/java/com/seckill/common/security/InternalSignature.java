@@ -8,7 +8,7 @@ import java.util.HexFormat;
 
 /**
  * Phase 6.6 内部接口 Service ACL 签名工具（HMAC-SHA256）。
- * payload 约定：serviceName + ":" + timestamp（毫秒）。
+ * payload 约定：serviceName + ":" + timestamp + ":" + nonce（毫秒时间戳）。
  */
 public final class InternalSignature {
 
@@ -27,6 +27,14 @@ public final class InternalSignature {
         }
     }
 
+    public static String payload(String serviceName, String timestamp, String nonce) {
+        return serviceName + ":" + timestamp + ":" + nonce;
+    }
+
+    public static String sign(String secret, String serviceName, String timestamp, String nonce) {
+        return sign(secret, payload(serviceName, timestamp, nonce));
+    }
+
     public static boolean verify(String secret, String data, String signature) {
         if (signature == null || signature.isBlank()) {
             return false;
@@ -34,5 +42,10 @@ public final class InternalSignature {
         byte[] expected = sign(secret, data).getBytes(StandardCharsets.UTF_8);
         byte[] actual = signature.getBytes(StandardCharsets.UTF_8);
         return MessageDigest.isEqual(expected, actual);
+    }
+
+    public static boolean verify(String secret, String serviceName, String timestamp,
+                                 String nonce, String signature) {
+        return verify(secret, payload(serviceName, timestamp, nonce), signature);
     }
 }

@@ -54,9 +54,7 @@ public class OrderService {
      */
     @Transactional
     public SeckillOrder createOrder(CreateOrderMessage message) {
-        if (message.getAmount() == null || message.getAmount() <= 0) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "消息缺少金额快照");
-        }
+        long orderId = validateAndParseOrderId(message);
         try {
             Idempotent idempotent = new Idempotent();
             idempotent.setId(snowflakeIdGenerator.nextId());
@@ -69,7 +67,6 @@ public class OrderService {
             return null;
         }
 
-        long orderId = Long.parseLong(message.getOrderId());
         BigDecimal amount = BigDecimal.valueOf(message.getAmount()).movePointLeft(2);
         SeckillOrder order = new SeckillOrder();
         order.setId(orderId);
@@ -268,6 +265,39 @@ public class OrderService {
                 || message.getAmount() == null
                 || message.getAmount().signum() <= 0) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "PAY_SUCCESS 消息字段不完整");
+        }
+    }
+
+    private static long validateAndParseOrderId(CreateOrderMessage message) {
+        if (message == null) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "CREATE_ORDER 消息不能为空");
+        }
+        if (isBlank(message.getMessageId())
+                || message.getUserId() == null
+                || message.getUserId() <= 0
+                || message.getSkuId() == null
+                || message.getSkuId() <= 0
+                || message.getSessionId() == null
+                || message.getSessionId() <= 0) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "CREATE_ORDER 消息字段不完整");
+        }
+        if (message.getQuantity() != null && message.getQuantity() <= 0) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "商品数量必须大于0");
+        }
+        if (message.getAmount() == null || message.getAmount() <= 0) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "消息缺少金额快照");
+        }
+        if (isBlank(message.getOrderId())) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "订单号不能为空");
+        }
+        try {
+            long orderId = Long.parseLong(message.getOrderId());
+            if (orderId <= 0) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR, "订单号必须为正整数");
+            }
+            return orderId;
+        } catch (NumberFormatException e) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "订单号必须为正整数");
         }
     }
 

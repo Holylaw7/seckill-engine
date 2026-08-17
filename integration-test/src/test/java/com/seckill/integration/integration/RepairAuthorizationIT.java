@@ -22,6 +22,7 @@ import java.net.http.HttpClient;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -46,14 +47,15 @@ class RepairAuthorizationIT extends IntegrationTestBase {
         try {
             String base = "http://localhost:" + inventory.port() + "/api/v1/inventory/admin";
             // 未授权查询 → 401
-            assertThat(get(base + "/reconcile?skuId=" + SKU_ID, null, null, null)
+            assertThat(get(base + "/reconcile?skuId=" + SKU_ID, null, null, null, null)
                     .getStatusCode().value()).isEqualTo(401);
             // operator/service 查询 diff → 200
             String operatorTs = String.valueOf(System.currentTimeMillis());
+            String operatorNonce = UUID.randomUUID().toString().replace("-", "");
             String operatorSig = InternalSignature.sign("dev-inventory-secret",
-                    "inventory-service:" + operatorTs);
+                    "inventory-service", operatorTs, operatorNonce);
             assertThat(get(base + "/reconcile?skuId=" + SKU_ID, "inventory-service",
-                    operatorTs, operatorSig).getStatusCode().value()).isEqualTo(200);
+                    operatorTs, operatorNonce, operatorSig).getStatusCode().value()).isEqualTo(200);
 
             Map<String, Object> repairBody = new LinkedHashMap<>();
             repairBody.put("skuId", SKU_ID);
@@ -63,16 +65,18 @@ class RepairAuthorizationIT extends IntegrationTestBase {
 
             // operator 执行 repair → 403
             String repairTs = String.valueOf(System.currentTimeMillis());
+            String repairNonce = UUID.randomUUID().toString().replace("-", "");
             String repairSig = InternalSignature.sign("dev-inventory-secret",
-                    "inventory-service:" + repairTs);
+                    "inventory-service", repairTs, repairNonce);
             assertThat(post(base + "/reconcile/repair", repairJson, "inventory-service",
-                    repairTs, repairSig).getStatusCode().value()).isEqualTo(403);
+                    repairTs, repairNonce, repairSig).getStatusCode().value()).isEqualTo(403);
 
             // admin 执行 repair → 200
             String adminTs = String.valueOf(System.currentTimeMillis());
-            String adminSig = InternalSignature.sign("dev-admin-secret", "admin:" + adminTs);
+            String adminNonce = UUID.randomUUID().toString().replace("-", "");
+            String adminSig = InternalSignature.sign("dev-admin-secret", "admin", adminTs, adminNonce);
             ResponseEntity<String> ok = post(base + "/reconcile/repair", repairJson,
-                    "admin", adminTs, adminSig);
+                    "admin", adminTs, adminNonce, adminSig);
             assertThat(ok.getStatusCode().value()).isEqualTo(200);
             assertThat(ok.getBody()).contains("\"code\":0");
         } finally {
@@ -81,23 +85,25 @@ class RepairAuthorizationIT extends IntegrationTestBase {
         }
     }
 
-    private static ResponseEntity<String> get(String url, String name, String timestamp, String signature) {
-        return REST.exchange(url, HttpMethod.GET, new HttpEntity<>(headers(name, timestamp, signature)),
+    private static ResponseEntity<String> get(String url, String name, String timestamp,
+                                              String nonce, String signature) {
+        return REST.exchange(url, HttpMethod.GET, new HttpEntity<>(headers(name, timestamp, nonce, signature)),
                 String.class);
     }
 
     private static ResponseEntity<String> post(String url, String body, String name,
-                                               String timestamp, String signature) {
-        HttpHeaders headers = headers(name, timestamp, signature);
+                                               String timestamp, String nonce, String signature) {
+        HttpHeaders headers = headers(name, timestamp, nonce, signature);
         headers.setContentType(MediaType.APPLICATION_JSON);
         return REST.exchange(url, HttpMethod.POST, new HttpEntity<>(body, headers), String.class);
     }
 
-    private static HttpHeaders headers(String name, String timestamp, String signature) {
+    private static HttpHeaders headers(String name, String timestamp, String nonce, String signature) {
         HttpHeaders headers = new HttpHeaders();
         if (name != null) {
             headers.set("X-Service-Name", name);
             headers.set("X-Service-Timestamp", timestamp);
+            headers.set("X-Service-Nonce", nonce);
             headers.set("X-Service-Signature", signature);
         }
         return headers;
