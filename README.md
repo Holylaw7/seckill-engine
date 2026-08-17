@@ -1,6 +1,6 @@
 # Seckill-Engine
 
-金融级高并发秒杀交易系统：面向瞬时高并发请求，提供**防超卖、最终一致性、可回滚、可观测**的分布式秒杀能力。
+高并发秒杀交易系统：面向瞬时高并发请求，提供**防超卖、最终一致性、可回滚、可观测**的分布式秒杀能力。
 
 > 版本：`0.1.0-RC1`（分支 `release/RC1`）
 > 定位：个人简历项目——完整实践高并发交易系统的架构、工程与发布验证体系。
@@ -50,34 +50,34 @@ execute ─▶ Gateway(鉴权/限流/Canary) ─▶ seckill(Redis Lua 原子扣�
 
 ## 二、技术栈
 
-| 组件 | 版本 | 用途 |
-| --- | --- | --- |
-| JDK | 21 LTS | 运行与编译 |
-| Spring Boot | 3.2.5 | 微服务框架 |
-| Spring Cloud Gateway | 4.1.2 | 网关：JWT/限流/黑名单/Canary |
-| MyBatis Plus | 3.5.7 | ORM |
-| MySQL | 8.0.36 | 业务数据落库 |
-| Redis | 7.2.4 | 库存预扣、防重、限流 |
-| RocketMQ | 5.3.1 | 事务消息、最终一致性 |
-| Testcontainers | 1.21.4 | 集成测试真实中间件 |
-| Maven / JaCoCo | 3.9.x / 0.8.x | 构建与覆盖率门禁 |
-| GitHub Actions | — | 5 阶段 CI + dependency-scan 门禁 |
+| 组件                 | 版本          | 用途                             |
+| -------------------- | ------------- | -------------------------------- |
+| JDK                  | 21 LTS        | 运行与编译                       |
+| Spring Boot          | 3.2.5         | 微服务框架                       |
+| Spring Cloud Gateway | 4.1.2         | 网关：JWT/限流/黑名单/Canary     |
+| MyBatis Plus         | 3.5.7         | ORM                              |
+| MySQL                | 8.0.36        | 业务数据落库                     |
+| Redis                | 7.2.4         | 库存预扣、防重、限流             |
+| RocketMQ             | 5.3.1         | 事务消息、最终一致性             |
+| Testcontainers       | 1.21.4        | 集成测试真实中间件               |
+| Maven / JaCoCo       | 3.9.x / 0.8.x | 构建与覆盖率门禁                 |
+| GitHub Actions       | —             | 5 阶段 CI + dependency-scan 门禁 |
 
 ---
 
 ## 三、关键指标（实测证据）
 
-| 指标 | 结果 |
-| --- | --- |
-| 单元测试 | 365 个，0 failure / 0 error |
-| 集成测试 | 22 个 IT 类（真实 MySQL/Redis/RocketMQ） |
-| 故障演练 | 6 类（Redis/MySQL/MQ/服务） |
-| Gateway 容量 | 单实例 700-900 QPS（隔离拓扑，p99≤500ms） |
-| E2E 10000 | L-07 实跑 PASS（零超卖 / deadlock=0 / 幂等 / 恢复） |
-| Canary 窗口 | 113 万请求 / 5% 分流 4.97% / error=0 |
-| 分桶 N=8 | H-01 消费 360 QPS，死锁 0 |
-| 回滚 RTO | Gateway 100→0 < 5min（实测毫秒级） |
-| 提交数 | 220+ commits（单一职责、可审计） |
+| 指标         | 结果                                                |
+| ------------ | --------------------------------------------------- |
+| 单元测试     | 365 个，0 failure / 0 error                         |
+| 集成测试     | 22 个 IT 类（真实 MySQL/Redis/RocketMQ）            |
+| 故障演练     | 6 类（Redis/MySQL/MQ/服务）                         |
+| Gateway 容量 | 单实例 700-900 QPS（隔离拓扑，p99≤500ms）           |
+| E2E 10000    | L-07 实跑 PASS（零超卖 / deadlock=0 / 幂等 / 恢复） |
+| Canary 窗口  | 113 万请求 / 5% 分流 4.97% / error=0                |
+| 分桶 N=8     | H-01 消费 360 QPS，死锁 0                           |
+| 回滚 RTO     | Gateway 100→0 < 5min（实测毫秒级）                  |
+| 提交数       | 220+ commits（单一职责、可审计）                    |
 
 ---
 
@@ -142,15 +142,15 @@ mvn -pl integration-test -am test -Dtest=ProductionScaleValidationTest \
 
 ## 六、GA 状态（诚实标注）
 
-| Gate | 状态 | 说明 |
-| --- | --- | --- |
-| Inventory Consistency | ✅ PASS | 零超卖、Redis==MySQL、不变量 |
-| Monitoring / Rollback | ✅ PASS | Prometheus + RTO<5min |
-| Dependency Scan | ⏳ PENDING | 需远程 GitHub Actions 实际证据 |
-| E2E 50000 | ❌ NOT PASS | 需独立 Load Generator + 生产 MQ（个人环境未具备） |
-| MQ Stability | ⏳ PENDING | 需生产规格 RocketMQ |
-| Production Canary | ⏳ PENDING | 需生产数据中心流量窗口 |
-| Operations Sign-off | ⏳ PENDING | 需运营 Owner 签署 |
+| Gate                  | 状态        | 说明                                              |
+| --------------------- | ----------- | ------------------------------------------------- |
+| Inventory Consistency | ✅ PASS     | 零超卖、Redis==MySQL、不变量                      |
+| Monitoring / Rollback | ✅ PASS     | Prometheus + RTO<5min                             |
+| Dependency Scan       | ⏳ PENDING  | 需远程 GitHub Actions 实际证据                    |
+| E2E 50000             | ❌ NOT PASS | 需独立 Load Generator + 生产 MQ（个人环境未具备） |
+| MQ Stability          | ⏳ PENDING  | 需生产规格 RocketMQ                               |
+| Production Canary     | ⏳ PENDING  | 需生产数据中心流量窗口                            |
+| Operations Sign-off   | ⏳ PENDING  | 需运营 Owner 签署                                 |
 
 **结论：工程与正确性验证全部完成；剩余阻塞全部来自外部生产验证资源，
 非代码缺陷。** 个人项目按 [A1-A5 执行指南](docs/06-production/personal-project-a1-a5-execution-guide.md) 约 1-2 天可完成"可演示上线"。
@@ -169,12 +169,12 @@ mvn -pl integration-test -am test -Dtest=ProductionScaleValidationTest \
 
 ## 八、文档导航
 
-| 文档 | 位置 |
-| --- | --- |
-| 需求/架构/设计 | `docs/01-需求分析`、`docs/02-架构设计`、`docs/03-详细设计` |
-| 测试报告 | `docs/04-测试报告`、`docs/04-测试体系` |
-| 性能优化 | `docs/05-性能优化`（Phase 6.0-6.5 报告） |
-| 生产/发布 | `docs/06-production`（GA 审计、Canary、回滚、操作手册） |
-| Release | `docs/07-release` |
-| 证据索引 | [docs/06-production/INDEX.md](docs/06-production/INDEX.md) |
-| 操作手册 | [docs/06-production/operations-runbook.md](docs/06-production/operations-runbook.md) |
+| 文档           | 位置                                                                                 |
+| -------------- | ------------------------------------------------------------------------------------ |
+| 需求/架构/设计 | `docs/01-需求分析`、`docs/02-架构设计`、`docs/03-详细设计`                           |
+| 测试报告       | `docs/04-测试报告`、`docs/04-测试体系`                                               |
+| 性能优化       | `docs/05-性能优化`（Phase 6.0-6.5 报告）                                             |
+| 生产/发布      | `docs/06-production`（GA 审计、Canary、回滚、操作手册）                              |
+| Release        | `docs/07-release`                                                                    |
+| 证据索引       | [docs/06-production/INDEX.md](docs/06-production/INDEX.md)                           |
+| 操作手册       | [docs/06-production/operations-runbook.md](docs/06-production/operations-runbook.md) |
