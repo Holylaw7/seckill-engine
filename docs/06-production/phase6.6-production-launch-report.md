@@ -127,7 +127,7 @@ Inventory Safety / MQ Health / Recovery Status）。
    绝对数值不作为生产容量结论；生产容量以 Phase 6.4 隔离环境 + 独立压测环境复核为准；
 2. 50k / 100k E2E 未在本机执行（协议就绪，需独立环境）；
 3. OWASP dependency-check 本地 NVD 下载超时，扫描门禁以 CI 结果为准；
-4. order-service PAY_SUCCESS 消费端未实现（Phase 5.6 登记，不阻塞秒杀主链路）；
+4. 历史 Phase 5.6 曾登记 order-service PAY_SUCCESS 消费端缺口；该缺口已在整体收敛阶段补齐，并由支付回调集成测试验证；
 5. Redis 无持久化，恢复依赖预热 + 对账（演练已覆盖）；
 6. chaos 全量同 JVM 连续执行存在 MQ 收敛级联伪影，生产演练按类隔离执行（Phase 6.4 登记）。
 

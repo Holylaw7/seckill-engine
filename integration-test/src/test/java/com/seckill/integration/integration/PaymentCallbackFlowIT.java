@@ -7,6 +7,7 @@ import com.seckill.integration.support.ServiceLauncher;
 import com.seckill.integration.support.ServiceSupport;
 import com.seckill.integration.support.TestDataHelper;
 import com.seckill.integration.support.TestHttp;
+import com.seckill.order.OrderApplication;
 import com.seckill.payment.PaymentApplication;
 import com.seckill.payment.dto.CreatePayResponse;
 import org.junit.jupiter.api.AfterAll;
@@ -24,8 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 /**
- * SC-05 支付回调链路：首次成功 / 重复回调 / 金额异常 / 验签失败。
- * 已知边界：order-service 未实现 PAY_SUCCESS 消费端，本阶段断言止于消息发布。
+ * SC-05 支付回调链路：payment_order 成功 + PAY_SUCCESS 发布 + order 状态闭环。
  */
 @Tag("integration")
 class PaymentCallbackFlowIT extends IntegrationTestBase {
@@ -36,11 +36,15 @@ class PaymentCallbackFlowIT extends IntegrationTestBase {
     private static final String MOCK_SECRET = "mock-channel-secret";
 
     private static ServiceLauncher.RunningService PAYMENT;
+    private static ServiceLauncher.RunningService ORDER;
 
     @BeforeAll
     static void startServices() throws Exception {
         // 预热消息：触发 topic 路由在 namesrv 生效，避免 PAY_SUCCESS 发送时 No route info
         sendRocketMqMessage("seckill-order-tx", "TEST_WARMUP", "{\"warmup\":true}");
+        ORDER = ServiceSupport.start(OrderApplication.class, "order", "seckill_order", "order-service",
+                "--seckill.order.timeout-close.period-seconds=3600000",
+                "--seckill.order.cancel-notify-compensate-period-seconds=3600000");
         PAYMENT = ServiceSupport.start(PaymentApplication.class, "payment", "seckill_payment", "payment-service",
                 "--seckill.payment.refund-compensate.period-seconds=3600");
     }
@@ -50,12 +54,16 @@ class PaymentCallbackFlowIT extends IntegrationTestBase {
         if (PAYMENT != null) {
             PAYMENT.stop();
         }
+        if (ORDER != null) {
+            ORDER.stop();
+        }
     }
 
     @BeforeEach
     void reset() throws Exception {
         cleanRedis("seckill:*", "auth:session:*", "risk:*");
         TestDataHelper.cleanupPaymentNamespace(ORDER_PREFIX);
+        TestDataHelper.cleanupOrderNoPrefix(ORDER_PREFIX);
     }
 
     @Test
@@ -83,6 +91,11 @@ class PaymentCallbackFlowIT extends IntegrationTestBase {
                         + "WHERE channel_transaction_no='TXN-FIRST-1'")).isEqualTo("VERIFY_OK");
                 assertThat(queryString("SELECT process_status FROM seckill_payment.payment_callback_log "
                         + "WHERE channel_transaction_no='TXN-FIRST-1'")).isEqualTo("SUCCESS");
+                assertThat(queryString("SELECT order_status FROM seckill_order.seckill_order "
+                        + "WHERE order_no LIKE '" + ORDER_PREFIX + "%' AND user_id=" + USER_ID))
+                        .isEqualTo("PAY_SUCCESS");
+                assertThat(queryInt("SELECT COUNT(*) FROM seckill_order.idempotent "
+                        + "WHERE biz_type='PAY_SUCCESS' AND user_id=" + USER_ID)).isEqualTo(1);
             });
             consumer.awaitCount(paymentNo, 1, Duration.ofSeconds(30));
         }
@@ -106,6 +119,11 @@ class PaymentCallbackFlowIT extends IntegrationTestBase {
                         .isEqualTo(2);
                 assertThat(queryInt("SELECT COUNT(*) FROM seckill_payment.payment_callback_log "
                         + "WHERE channel_transaction_no='TXN-DUP-1'")).isEqualTo(1);
+                assertThat(queryInt("SELECT COUNT(*) FROM seckill_order.seckill_order "
+                        + "WHERE order_no LIKE '" + ORDER_PREFIX + "%' AND order_status='PAY_SUCCESS'"))
+                        .isEqualTo(1);
+                assertThat(queryInt("SELECT COUNT(*) FROM seckill_order.idempotent "
+                        + "WHERE biz_type='PAY_SUCCESS' AND user_id=" + USER_ID)).isEqualTo(1);
             });
             consumer.awaitCount(paymentNo, 1, Duration.ofSeconds(30));
         }
@@ -123,6 +141,9 @@ class PaymentCallbackFlowIT extends IntegrationTestBase {
                     .isEqualTo("WAIT_PAY");
             assertThat(queryInt("SELECT version FROM seckill_payment.payment_order WHERE payment_no='" + paymentNo + "'"))
                     .isEqualTo(1);
+            assertThat(queryString("SELECT order_status FROM seckill_order.seckill_order "
+                    + "WHERE order_no LIKE '" + ORDER_PREFIX + "%' AND user_id=" + USER_ID))
+                    .isEqualTo("WAIT_PAY");
             await().atMost(Duration.ofSeconds(15)).untilAsserted(() ->
                     assertThat(queryString("SELECT verify_result FROM seckill_payment.payment_callback_log "
                             + "WHERE channel_transaction_no='TXN-AMT-1'")).isEqualTo("AMOUNT_MISMATCH"));
@@ -145,6 +166,9 @@ class PaymentCallbackFlowIT extends IntegrationTestBase {
                     .isEqualTo("WAIT_PAY");
             assertThat(queryInt("SELECT version FROM seckill_payment.payment_order WHERE payment_no='" + paymentNo + "'"))
                     .isEqualTo(1);
+            assertThat(queryString("SELECT order_status FROM seckill_order.seckill_order "
+                    + "WHERE order_no LIKE '" + ORDER_PREFIX + "%' AND user_id=" + USER_ID))
+                    .isEqualTo("WAIT_PAY");
             await().atMost(Duration.ofSeconds(15)).untilAsserted(() -> {
                 assertThat(queryInt("SELECT COUNT(*) FROM seckill_payment.payment_callback_log "
                         + "WHERE channel_transaction_no='TXN-SIGN-1'")).isEqualTo(1);
@@ -157,12 +181,13 @@ class PaymentCallbackFlowIT extends IntegrationTestBase {
         }
     }
 
-    private static String createPayment(String traceId) {
+    private static String createPayment(String traceId) throws Exception {
         String orderNo = ORDER_PREFIX + UUID.randomUUID();
         Result<CreatePayResponse> result = TestHttp.createPayment(
                 "http://localhost:" + PAYMENT.port(), orderNo, USER_ID, AMOUNT);
         assertThat(result).isNotNull();
         assertThat(result.getCode()).isZero();
+        TestDataHelper.seedWaitPayOrder(orderNo, USER_ID, AMOUNT);
         return result.getData().getPaymentNo();
     }
 

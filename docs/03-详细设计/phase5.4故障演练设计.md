@@ -286,7 +286,7 @@ Service（auth → seckill → order / inventory / payment）
 
 ## 6. 已知边界（特别登记）
 
-1. **order-service PAY_SUCCESS 消费端未实现**：payment 支付成功只验证 payment 状态与 PAY_SUCCESS 消息发布；order 保持 WAIT_PAY，本阶段不新增消费端、不断言订单联动；
+1. **历史设计边界**：Phase 5.4 编写时 payment 支付成功只验证 payment 状态与 PAY_SUCCESS 消息发布；该消费端已在整体收敛阶段补齐，本报告保留原阶段演练口径；
 2. **recover 契约未含 userId**：Redis 回补不校验/不清理 `seckill:user:{skuId}:{userId}` 防重标记；本阶段不回补、不扩展契约，用户标记语义留设计评审；
 3. Redis 无持久化：宕机恢复后热点库存与用户标记丢失属预期，由“重新预热 + 对账”恢复；不新增预热接口；
 4. RocketMQ 重试次数/延迟以测试容器默认行为为准，不修改消费端配置；

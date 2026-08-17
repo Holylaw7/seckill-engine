@@ -9,6 +9,8 @@ import com.seckill.order.mapper.SeckillOrderMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
+
 /**
  * 订单状态机（冻结：所有状态变更必须经过本组件，Controller 禁止直接改 status）。
  */
@@ -50,6 +52,9 @@ public class OrderStateMachine {
                 .set(SeckillOrder::getActiveKey, newActiveKey)
                 .set(SeckillOrder::getCancelReason, cancelReason)
                 .set(SeckillOrder::getVersion, order.getVersion() + 1);
+        if (OrderConstants.STATUS_PAY_SUCCESS.equals(targetStatus)) {
+            wrapper.set(SeckillOrder::getPaidAt, LocalDateTime.now());
+        }
         if (releaseActiveKey) {
             wrapper.set(SeckillOrder::getCancelNotifyStatus, OrderConstants.NOTIFY_PENDING);
         }

@@ -203,10 +203,11 @@ inventory DEDUCT（行锁 + CAS）
 
 以下边界在本阶段不修复，登记为 Known Issue / Follow-up：
 
-1. **order-service PAY_SUCCESS 消费端未实现**：当前只验证 payment 侧状态与 PAY_SUCCESS 消息发布；订单支付状态联动登记 Phase 后续。
+1. **PAY_SUCCESS 订单联动已在整体收敛阶段补齐**：payment 回调发布事件，order-service 按 `paymentNo` 幂等消费并更新 `WAIT_PAY→PAY_SUCCESS`；由 `PaymentCallbackFlowIT` 回归验证。
 2. **recover 契约无 userId**：Redis 回补不处理 `seckill:user:{skuId}:{userId}` 防重标记清理；用户标记语义留设计评审。
-3. **Redis 无持久化**：宕机恢复依赖“重新预热 + 对账/repair”，不新增预热接口。
-4. **性能基线为 Testcontainers 单机环境值**（R-01/R-02/R-05）：10,000 QPS 等生产门禁需 Phase 5.8 真实环境压测；L-04 慢 SQL 4,596 条为环境基线观察，不作为本阶段失败项。
+3. **Redis 无持久化**：宕机恢复依赖“按 MySQL available_stock 重新预热 + 对账/repair”，已由 `BackupRecoveryDrillIT` 演练。
+4. **性能基线为 Testcontainers 单机环境值**（R-01/R-02/R-05）：10,000 QPS 等生产门禁需独立环境压测；L-04 慢 SQL 4,596 条为环境基线观察，不作为本阶段失败项。
+5. **退款事件尚未闭环**：`REFUND_SUCCESS → order REFUND` 保留为后续工作。
 
 ---
 

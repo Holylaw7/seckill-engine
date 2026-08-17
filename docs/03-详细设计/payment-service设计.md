@@ -1,10 +1,10 @@
-# Seckill-Engine payment-service 设计确认（Phase 4.7）
+# Seckill-Engine payment-service 设计确认（Phase 4.7 + 整体收敛补充）
 
 | 项目 | 内容 |
 | --- | --- |
-| 文档版本 | v1.0（评审稿） |
-| 状态 | 待评审 |
-| 日期 | 2026-08-01 |
+| 文档版本 | v1.1（评审稿 + PAY_SUCCESS 已实施） |
+| 状态 | 已评审，支付回调到订单状态闭环已实现 |
+| 日期 | 2026-08-17 |
 | 关联基线 | 需求基线 v1.0 / 架构基线 v1.0 / 详细设计基线 v1.0（数据库/MQ/接口/事务边界） |
 | 前置依赖 | seckill-common、order-service（订单金额快照与状态机已支持 WAIT_PAY→PAY_SUCCESS） |
 
@@ -22,7 +22,8 @@ payment-service 负责：支付单创建、支付状态管理、支付渠道抽�
 | 内部 HTTP 接口（order-service 服务端调用创建支付） | 禁止直接修改库存 |
 | 支付对账与退款补偿任务 | 禁止跨服务直连数据库 |
 
-跨服务通信：MQ（发布 `PAY_SUCCESS`）+ 内部 HTTP 接口（order-service → payment-service 创建支付；order-service 消费 PAY_SUCCESS 更新订单，见附录 A 变更申请）。
+跨服务通信：MQ（发布 `PAY_SUCCESS`）+ 内部 HTTP 接口（order-service → payment-service 创建支付）。
+order-service 已通过独立消费组消费 `PAY_SUCCESS`，不直接修改 payment 数据库。
 
 ## 2. 数据库设计确认
 
@@ -112,7 +113,7 @@ order-service（服务端，已鉴权）
   4 金额校验：回调金额 == payment_order.amount（不符拒绝 + 告警）
   5 payment_order CAS 更新 WAIT_PAY → PAY_SUCCESS（幂等）
   6 发布 PAY_SUCCESS 事件（MQ）
-  7 order-service 消费更新订单 WAIT_PAY → PAY_SUCCESS（附录 A 变更申请）
+  7 order-service 消费更新订单 WAIT_PAY → PAY_SUCCESS（已实施，按 paymentNo 幂等）
 ```
 
 回调要求：验签、幂等、防重复、防篡改（原文快照 + 验签结果留痕）；**重复回调直接返回成功**。
@@ -124,10 +125,10 @@ order-service（服务端，已鉴权）
 | Topic / Tag | `seckill-order-tx` / `PAY_SUCCESS` |
 | 消息字段 | messageId、paymentNo、orderNo、userId、amount、transactionNo、timestamp |
 | 发送方 | payment-service（支付成功后） |
-| 消费方 | order-service（新增消费，见附录 A 变更申请） |
-| 消费动作 | 订单 WAIT_PAY → PAY_SUCCESS（幂等，状态机已支持） |
+| 消费方 | order-service（消费组 `order-pay-success-consumer`） |
+| 消费动作 | 订单 WAIT_PAY → PAY_SUCCESS，写入 `paid_at` |
 
-消费幂等：order-service 幂等表（PAY_CALLBACK/paymentNo）+ 订单状态机 CAS；重复事件无副作用。
+消费幂等：order-service 幂等表（`PAY_SUCCESS/paymentNo`）+ 订单状态机 CAS；重复事件无副作用。
 
 ## 7. 退款设计
 
@@ -180,19 +181,19 @@ interface PaymentChannel {
 | PaymentChannelTest | MockChannel createPay/verify/query/refund、可配置失败 |
 | RefundServiceTest | 退款成功、退款失败补偿重试、refund_no 幂等 |
 | MqProducerTest | PAY_SUCCESS 消息字段与发送失败处理 |
-| 集成（Phase 5） | 真实 MySQL/RocketMQ 联调、回调重放、对账 |
+| 集成 | `PaymentCallbackFlowIT` 覆盖首次回调、重复回调、金额异常、验签异常和订单状态闭环 |
 
 ---
 
-## 附录 A：跨服务契约变更申请（待评审批准）
+## 附录 A：跨服务契约变更申请（已实施）
 
-支付成功后订单状态更新需要 order-service 新增消费：
+支付成功后订单状态更新已由 order-service 新增消费实现：
 
 | 项 | 内容 |
 | --- | --- |
-| 变更 | order-service 消费 `seckill-order-tx/PAY_SUCCESS`，幂等表（PAY_CALLBACK/paymentNo）+ 状态机更新 WAIT_PAY→PAY_SUCCESS |
-| 影响 | order-service 状态机 `canTransition` 已支持，仅需新增 Consumer 与幂等接入（独立小变更） |
-| 实施 | 评审批准后作为独立小变更追加；本阶段 payment-service 编码不修改 order-service |
+| 变更 | order-service 消费 `seckill-order-tx/PAY_SUCCESS`，幂等表（`PAY_SUCCESS/paymentNo`）+ 状态机更新 WAIT_PAY→PAY_SUCCESS |
+| 影响 | order-service 状态机 `canTransition` 已支持，状态机 CAS 成功时写入 `paid_at` |
+| 实施 | 已实施并通过 `PaySuccessConsumerTest` 与 `PaymentCallbackFlowIT` |
 
 ## 附录 B：待评审确认项
 

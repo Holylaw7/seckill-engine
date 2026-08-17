@@ -185,7 +185,7 @@ integration-test
    - payment_order：WAIT_PAY→PAY_SUCCESS（version CAS、transaction_no、pay_time 写入）；
    - callback_log：VERIFY_OK/PROCESS_SUCCESS；
    - PAY_SUCCESS MQ 发布（测试消费者接收并断言字段）；
-   - **order 状态更新为 PAY_SUCCESS：已知待办** —— order-service 尚未实现 PAY_SUCCESS 消费端（Phase 4.6 冻结范围），本阶段不新增业务能力；断言止于“PAY_SUCCESS 消息已发布”，并在 Phase 5.8 报告中登记链路缺口。
+   - **历史边界（Phase 5 编写时）**：当时 order-service 尚未实现 PAY_SUCCESS 消费端，断言止于“PAY_SUCCESS 消息已发布”；该缺口已在整体收敛阶段补齐，当前由 `PaymentCallbackFlowIT` 断言订单状态联动。
 
 ### 7.2 重复回调
 

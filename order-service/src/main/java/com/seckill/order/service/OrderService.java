@@ -13,6 +13,7 @@ import com.seckill.order.dto.CancelOrderMessage;
 import com.seckill.order.dto.CreateOrderMessage;
 import com.seckill.order.dto.OrderDetailResponse;
 import com.seckill.order.dto.OrderStatusResponse;
+import com.seckill.order.dto.PaySuccessMessage;
 import com.seckill.order.entity.Idempotent;
 import com.seckill.order.entity.OrderItem;
 import com.seckill.order.entity.SeckillOrder;
@@ -22,6 +23,7 @@ import com.seckill.order.mapper.SeckillOrderMapper;
 import com.seckill.order.mq.CancelOrderProducer;
 import com.seckill.order.state.OrderStateMachine;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +36,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class OrderService {
 
     private final SeckillOrderMapper orderMapper;
@@ -101,6 +104,64 @@ public class OrderService {
             throw new BusinessException(ErrorCode.ORDER_STATUS_INVALID, "订单状态流转失败");
         }
         return order;
+    }
+
+    /**
+     * 消费 PAY_SUCCESS：校验支付快照、订单归属与金额后，在订单库事务内幂等流转状态。
+     *
+     * <p>幂等键使用 paymentNo，而不是 MQ messageId，确保同一支付单即使被重新封装为不同消息
+     * 也不会重复改变订单状态。</p>
+     */
+    @Transactional
+    public void processPaySuccess(PaySuccessMessage message) {
+        validatePaySuccessMessage(message);
+        SeckillOrder order = orderMapper.selectOne(new LambdaQueryWrapper<SeckillOrder>()
+                .eq(SeckillOrder::getOrderNo, message.getOrderNo()));
+        if (order == null) {
+            throw new BusinessException(ErrorCode.ORDER_NOT_FOUND,
+                    "支付成功事件对应订单不存在：" + message.getOrderNo());
+        }
+        if (!message.getUserId().equals(order.getUserId())) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "支付成功事件用户与订单不匹配");
+        }
+        if (order.getOrderAmount().compareTo(message.getAmount()) != 0) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "支付成功事件金额与订单快照不匹配");
+        }
+
+        if (!markPaySuccessIdempotent(message)) {
+            log.info("duplicate pay success event ignored, paymentNo={}, orderNo={}",
+                    message.getPaymentNo(), message.getOrderNo());
+            return;
+        }
+
+        if (OrderConstants.STATUS_PAY_SUCCESS.equals(order.getOrderStatus())) {
+            log.info("pay success already applied, paymentNo={}, orderNo={}",
+                    message.getPaymentNo(), message.getOrderNo());
+            return;
+        }
+        if (!OrderConstants.STATUS_WAIT_PAY.equals(order.getOrderStatus())) {
+            log.error("late pay success received for terminal order, paymentNo={}, orderNo={}, status={}",
+                    message.getPaymentNo(), message.getOrderNo(), order.getOrderStatus());
+            return;
+        }
+
+        boolean updated = orderStateMachine.transition(
+                order, OrderConstants.STATUS_PAY_SUCCESS, null);
+        if (updated) {
+            return;
+        }
+
+        // 重新读取确认是否由并发关单/支付成功事件先赢得 CAS。
+        SeckillOrder latest = orderMapper.selectOne(new LambdaQueryWrapper<SeckillOrder>()
+                .eq(SeckillOrder::getOrderNo, message.getOrderNo()));
+        if (latest != null && (OrderConstants.STATUS_PAY_SUCCESS.equals(latest.getOrderStatus())
+                || OrderConstants.STATUS_CANCEL.equals(latest.getOrderStatus())
+                || OrderConstants.STATUS_TIMEOUT.equals(latest.getOrderStatus()))) {
+            log.warn("pay success CAS lost, terminal state preserved, paymentNo={}, orderNo={}, status={}",
+                    message.getPaymentNo(), message.getOrderNo(), latest.getOrderStatus());
+            return;
+        }
+        throw new IllegalStateException("订单支付成功状态 CAS 冲突，等待 MQ 重试：" + message.getOrderNo());
     }
 
     /**
@@ -180,6 +241,38 @@ public class OrderService {
         }
         Page<SeckillOrder> page = orderMapper.selectPage(new Page<>(pageNum, pageSize), wrapper);
         return PageResult.of(page.getRecords(), page.getTotal(), pageNum, pageSize);
+    }
+
+    private boolean markPaySuccessIdempotent(PaySuccessMessage message) {
+        try {
+            Idempotent idempotent = new Idempotent();
+            idempotent.setId(snowflakeIdGenerator.nextId());
+            idempotent.setBizType(OrderConstants.BIZ_TYPE_PAY_SUCCESS);
+            idempotent.setBizId(message.getPaymentNo());
+            idempotent.setUserId(message.getUserId());
+            idempotent.setResultCode(OrderConstants.STATUS_PAY_SUCCESS);
+            idempotent.setStatus(1);
+            idempotentMapper.insert(idempotent);
+            return true;
+        } catch (DuplicateKeyException e) {
+            return false;
+        }
+    }
+
+    private static void validatePaySuccessMessage(PaySuccessMessage message) {
+        if (message == null
+                || isBlank(message.getPaymentNo())
+                || isBlank(message.getOrderNo())
+                || isBlank(message.getTransactionNo())
+                || message.getUserId() == null
+                || message.getAmount() == null
+                || message.getAmount().signum() <= 0) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "PAY_SUCCESS 消息字段不完整");
+        }
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     private SeckillOrder getOwnedOrder(Long userId, String orderId) {

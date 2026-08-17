@@ -7,8 +7,10 @@ import com.seckill.common.error.ErrorCode;
 import com.seckill.common.exception.BusinessException;
 import com.seckill.common.id.SnowflakeIdGenerator;
 import com.seckill.order.config.OrderProperties;
+import com.seckill.order.constant.OrderConstants;
 import com.seckill.order.dto.CancelOrderMessage;
 import com.seckill.order.dto.CreateOrderMessage;
+import com.seckill.order.dto.PaySuccessMessage;
 import com.seckill.order.entity.Idempotent;
 import com.seckill.order.entity.OrderItem;
 import com.seckill.order.entity.SeckillOrder;
@@ -89,10 +91,16 @@ class OrderServiceImplTest {
         order.setSessionId(30001L);
         order.setSkuId(20001L);
         order.setQuantity(1);
+        order.setOrderAmount(new BigDecimal("99.00"));
         order.setOrderStatus("WAIT_PAY");
         order.setActiveKey("10001:30001:20001");
         order.setVersion(2);
         return order;
+    }
+
+    private PaySuccessMessage paySuccessMessage() {
+        return new PaySuccessMessage("pay-msg-001", "P-001", "123",
+                10001L, new BigDecimal("99.00"), "TXN-001", System.currentTimeMillis());
     }
 
     @Test
@@ -129,6 +137,80 @@ class OrderServiceImplTest {
         BusinessException e = assertThrows(BusinessException.class,
                 () -> orderService.createOrder(message));
         assertEquals(ErrorCode.PARAM_ERROR, e.getErrorCode());
+    }
+
+    @Test
+    void paySuccessShouldTransitionWaitPayOrder() {
+        when(orderMapper.selectOne(any())).thenReturn(waitPayOrder());
+        when(orderMapper.update(isNull(), any())).thenReturn(1);
+
+        orderService.processPaySuccess(paySuccessMessage());
+
+        ArgumentCaptor<Idempotent> captor = ArgumentCaptor.forClass(Idempotent.class);
+        verify(idempotentMapper).insert(captor.capture());
+        assertEquals(OrderConstants.BIZ_TYPE_PAY_SUCCESS, captor.getValue().getBizType());
+        assertEquals("P-001", captor.getValue().getBizId());
+        verify(orderMapper).update(isNull(), any());
+    }
+
+    @Test
+    void duplicatePaySuccessShouldNotTransitionAgain() {
+        when(orderMapper.selectOne(any())).thenReturn(waitPayOrder());
+        doThrow(new DuplicateKeyException("duplicate"))
+                .when(idempotentMapper).insert(any(Idempotent.class));
+
+        orderService.processPaySuccess(paySuccessMessage());
+
+        verify(orderMapper, never()).update(isNull(), any());
+    }
+
+    @Test
+    void alreadyPaidOrderShouldBeIdempotent() {
+        SeckillOrder order = waitPayOrder();
+        order.setOrderStatus(OrderConstants.STATUS_PAY_SUCCESS);
+        when(orderMapper.selectOne(any())).thenReturn(order);
+
+        orderService.processPaySuccess(paySuccessMessage());
+
+        verify(idempotentMapper).insert(any(Idempotent.class));
+        verify(orderMapper, never()).update(isNull(), any());
+    }
+
+    @Test
+    void amountMismatchShouldBeRejectedBeforeIdempotencyInsert() {
+        when(orderMapper.selectOne(any())).thenReturn(waitPayOrder());
+        PaySuccessMessage message = paySuccessMessage();
+        message.setAmount(new BigDecimal("88.00"));
+
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> orderService.processPaySuccess(message));
+
+        assertEquals(ErrorCode.PARAM_ERROR, e.getErrorCode());
+        verify(idempotentMapper, never()).insert(any(Idempotent.class));
+    }
+
+    @Test
+    void terminalOrderShouldNotBeOverwrittenByPaySuccess() {
+        SeckillOrder order = waitPayOrder();
+        order.setOrderStatus(OrderConstants.STATUS_TIMEOUT);
+        when(orderMapper.selectOne(any())).thenReturn(order);
+
+        orderService.processPaySuccess(paySuccessMessage());
+
+        verify(idempotentMapper).insert(any(Idempotent.class));
+        verify(orderMapper, never()).update(isNull(), any());
+    }
+
+    @Test
+    void paySuccessCasConflictShouldRetryWhenOrderStillWaitPay() {
+        SeckillOrder first = waitPayOrder();
+        SeckillOrder latest = waitPayOrder();
+        latest.setVersion(3);
+        when(orderMapper.selectOne(any())).thenReturn(first, latest);
+        when(orderMapper.update(isNull(), any())).thenReturn(0);
+
+        assertThrows(IllegalStateException.class,
+                () -> orderService.processPaySuccess(paySuccessMessage()));
     }
 
     @Test

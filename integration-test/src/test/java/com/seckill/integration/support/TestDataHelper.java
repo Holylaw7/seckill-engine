@@ -64,6 +64,30 @@ public final class TestDataHelper {
                 + "WHERE order_no LIKE '" + orderNoPrefix + "%'");
     }
 
+    public static void seedWaitPayOrder(String orderNo, long userId, String amount) throws Exception {
+        long suffix = Integer.toUnsignedLong(orderNo.hashCode());
+        long orderId = 7_000_000_000L + suffix;
+        long sessionId = 8_000_000_000L + suffix;
+        long skuId = 9_000_000_000L + suffix;
+        IntegrationTestBase.execute("INSERT INTO seckill_order.seckill_order "
+                + "(id, order_no, user_id, session_id, sku_id, quantity, order_amount, order_status, "
+                + "active_key, cancel_notify_status, pay_deadline, version) VALUES ("
+                + orderId + ", '" + orderNo + "', " + userId + ", " + sessionId + ", " + skuId
+                + ", 1, " + amount + ", 'WAIT_PAY', '" + userId + ":" + sessionId + ":" + skuId
+                + "', 'PENDING', DATE_ADD(NOW(3), INTERVAL 15 MINUTE), 0)");
+    }
+
+    public static void cleanupOrderNoPrefix(String orderNoPrefix) throws Exception {
+        IntegrationTestBase.execute("DELETE oi FROM seckill_order.order_item oi "
+                + "JOIN seckill_order.seckill_order so ON oi.order_id = so.id "
+                + "WHERE so.order_no LIKE '" + orderNoPrefix + "%'");
+        IntegrationTestBase.execute("DELETE i FROM seckill_order.idempotent i "
+                + "JOIN seckill_order.seckill_order so ON i.user_id = so.user_id "
+                + "WHERE so.order_no LIKE '" + orderNoPrefix + "%'");
+        IntegrationTestBase.execute("DELETE FROM seckill_order.seckill_order "
+                + "WHERE order_no LIKE '" + orderNoPrefix + "%'");
+    }
+
     public static int countOrders(long sessionId, long skuId) throws Exception {
         return IntegrationTestBase.queryInt("SELECT COUNT(*) FROM seckill_order.seckill_order "
                 + "WHERE session_id=" + sessionId + " AND sku_id=" + skuId);

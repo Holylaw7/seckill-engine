@@ -503,7 +503,7 @@ PAY_SUCCESS 校验方式：integration-test 新增测试侧 `DefaultMQPushConsum
 | R-01 | **seckill-service 内部回补接口 `POST /api/v1/seckill/internal/stocks/recover` 当前未实现**（全仓检索确认，仅 inventory 侧契约与客户端存在） | SC-03、SC-04 的 Redis 回补断言将失败（当前 recover 返回 false 走 repair 告警路径） | 编码阶段第一步登记缺陷，按 `fix(seckill): implement internal stock recover endpoint`（冻结契约：requestId=flow_no 幂等、校验 ≤ total）提交，随后补 `test(integration): verify stock recover endpoint fix`；修复前相关场景预期 RED，不作为流程失败 |
 | R-02 | 冻结契约（inventory-service 附录 C.1）回补请求体为 `{requestId, skuId, sessionId, recoverCount}`，**不含 userId**，与 Phase 5.3 设计“回补时清除用户标记”冲突 | 无法按用户清除 `seckill:user:{skuId}:{userId}` 防重标记 | 本阶段 Redis 断言只覆盖库存回补；用户标记清除登记为契约缺口，提交设计评审裁决（追加 userId 或确认标记 TTL 语义），不在本阶段测试中造假绕过 |
 | R-03 | `CallbackHandler` 金额异常路径第二次 `saveLog(AMOUNT_MISMATCH)` 与防重放行共用 `channel_transaction_no`，**疑似触发 uk_callback_transaction 冲突**（代码走查发现） | SC-05 金额异常可能返回系统错误而非明确拒绝 | 集成实测确认；若成立按 `fix(payment)` 单独提交（失败原因回填同一日志行或改为更新），再补 verify 提交 |
-| R-04 | order-service 未实现 PAY_SUCCESS 消费端 | SC-05 无法验证订单侧支付联动；SC-06 需模拟状态流转 | 本阶段支付消息发布验证即可；订单支付状态联动继续登记 Phase 后续（见第 11 节） |
+| R-04 | 历史上 order-service 未实现 PAY_SUCCESS 消费端 | Phase 5 设计时 SC-05 无法验证订单侧支付联动 | 已在整体收敛阶段补齐；当前由 `PaymentCallbackFlowIT` 验证真实消费闭环 |
 | R-05 | RocketMQ 容器启动慢 / 固定端口（19876/20911）可能被占用 | 测试环境失败 | 沿用 Phase 5.3.1 已验证镜像与启动命令；端口占用时报告环境问题，不修改业务配置 |
 | R-06 | `TimeoutCloseTask` / `CancelNotifyCompensationTask` 自动调度干扰手工触发 | SC-04 / SC-06 竞争不确定 | 服务启动参数将自动调度周期调大（或禁用调度），仅测试代码手工触发任务 |
 | R-07 | 同类容器内跨测试类数据 / 消息残留 | 断言误报 | 命名空间隔离 + 幂等设计 + 断言限定测试命名空间；MQ 遗留消息因幂等无副作用 |
@@ -513,12 +513,11 @@ PAY_SUCCESS 校验方式：integration-test 新增测试侧 `DefaultMQPushConsum
 
 ## 11. 已知边界（特别登记）
 
-**order-service 当前 PAY_SUCCESS 消费端未实现（Phase 4.6 冻结范围）。**
+**历史边界：Phase 5 设计冻结时 order-service 尚未实现 PAY_SUCCESS 消费端。**
 
-- 本阶段 PaymentCallbackFlowIT 对支付成功链路的验证止于：payment_order 状态正确 + `PAY_SUCCESS` 消息已发布（测试侧消费者捕获）；
-- 不验证订单状态联动为 PAY_SUCCESS，不为此新增业务能力；
-- SC-06 中线程 B 调用 `OrderStateMachine` 仅为模拟未来消费端状态流转的测试手段，不修改业务代码；
-- 订单支付状态联动缺口继续登记 Phase 后续（Phase 5.8 报告 / 下一设计阶段）。
+- 原设计阶段的 PaymentCallbackFlowIT 只验证 payment_order 状态和 `PAY_SUCCESS` 消息发布；
+- 该历史限制不代表当前实现状态，整体收敛阶段已新增 Consumer、幂等键和订单状态断言；
+- 当前回归由 `PaymentCallbackFlowIT` 覆盖首次回调、重复回调、金额异常、验签异常和订单 `PAY_SUCCESS` 联动。
 
 ---
 

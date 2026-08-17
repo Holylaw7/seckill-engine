@@ -26,5 +26,14 @@ public interface StockService {
     /** 预热分桶库存 key（Phase 6.2，迁移后调用） */
     void prepareBucket(String skuId, int bucketNo, int bucketTotal);
 
+    /**
+     * 按库存事实源的可用库存恢复分桶 key。
+     *
+     * <p>与初始化方法区分：bucketTotal 不能代表已扣减/锁定后的可售库存。</p>
+     */
+    void prepareAvailable(String skuId, int totalStock, int availableStock);
+
+    void prepareAvailableBucket(String skuId, int bucketNo, int availableStock);
+
     boolean isUserMarked(String skuId, String userId);
 }

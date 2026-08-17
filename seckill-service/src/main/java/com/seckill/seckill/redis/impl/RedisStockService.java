@@ -114,6 +114,17 @@ public class RedisStockService implements StockService {
     }
 
     @Override
+    public void prepareAvailable(String skuId, int totalStock, int availableStock) {
+        redisTemplate.opsForValue().set(totalKey(skuId), String.valueOf(totalStock));
+        redisTemplate.opsForValue().set(stockKey(skuId), String.valueOf(availableStock));
+    }
+
+    @Override
+    public void prepareAvailableBucket(String skuId, int bucketNo, int availableStock) {
+        redisTemplate.opsForValue().set(bucketKey(skuId, bucketNo), String.valueOf(availableStock));
+    }
+
+    @Override
     public boolean isUserMarked(String skuId, String userId) {
         return Boolean.TRUE.equals(redisTemplate.hasKey(userKey(skuId, userId)));
     }

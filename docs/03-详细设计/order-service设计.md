@@ -1,10 +1,10 @@
-# Seckill-Engine order-service 设计确认（Phase 4.6）
+# Seckill-Engine order-service 设计确认（Phase 4.6 + 整体收敛补充）
 
 | 项目 | 内容 |
 | --- | --- |
-| 文档版本 | v1.1（设计已评审 + 冻结补充） |
-| 状态 | 已评审，冻结补充已确认 |
-| 日期 | 2026-08-01 |
+| 文档版本 | v1.2（设计已评审 + PAY_SUCCESS 已实施） |
+| 状态 | 已评审，支付成功消费闭环已实现 |
+| 日期 | 2026-08-17 |
 | 关联基线 | 需求基线 v1.0（订单状态机、BR-04）/ 架构基线 v1.0 / 详细设计基线 v1.0（数据库/MQ/接口/事务边界） |
 | 前置依赖 | seckill-common、seckill-service（`/internal/pre-deducts/confirm` 已实现） |
 | 变更记录 | v1.0 评审稿；v1.1 冻结补充：金额快照、状态机唯一入口、取消约束、超时关闭参数、CANCEL_ORDER 补偿 |
@@ -97,6 +97,30 @@ CREATE → WAIT_PAY → PAY_SUCCESS → REFUND（payment 阶段接入）
 - 与支付回调并发：`version` CAS 保证只有一方成功（支付先到则关单跳过）；
 - 关单只影响订单域，库存回补由 inventory-service 消费 `CANCEL_ORDER` 执行。
 
+### 6.1 PAY_SUCCESS 消费闭环（已实施）
+
+payment-service 验签、校验金额并完成支付单 CAS 后，发布：
+
+| 项 | 内容 |
+| --- | --- |
+| Topic / Tag | `seckill-order-tx` / `PAY_SUCCESS` |
+| Consumer Group | `order-pay-success-consumer` |
+| 事件字段 | `messageId / paymentNo / orderNo / userId / amount / transactionNo / timestamp` |
+| 业务幂等键 | `biz_type=PAY_SUCCESS`、`biz_id=paymentNo` |
+
+order-service 消费处理规则：
+
+1. 校验 `paymentNo`、`orderNo`、`transactionNo`、`userId` 和正金额；
+2. 查询订单并校验 `user_id`、金额快照与事件金额一致；
+3. 首次事件在订单库事务中写入幂等记录，执行 `WAIT_PAY → PAY_SUCCESS`；
+4. 状态机 CAS 成功时写入 `paid_at`，`active_key` 保留；
+5. 同一 `paymentNo` 重复消息无副作用；
+6. `CANCEL/TIMEOUT` 已先胜出时，迟到支付成功不覆盖终态；
+7. CAS 发生竞态时重新读取订单：终态可确认则 ACK，否则抛出运行时异常交由 MQ 重试；
+8. 字段或业务数据异常记录并 ACK，数据库、MQ 等基础设施异常不吞掉，交由重试机制处理。
+
+`REFUND_SUCCESS → order REFUND` 事件仍未接入，保留为后续退款闭环工作。
+
 ## 7. CANCEL_ORDER 发布
 
 - 触发：用户取消（WAIT_PAY→CANCEL）、超时关单（WAIT_PAY→TIMEOUT）；
@@ -112,6 +136,7 @@ CREATE → WAIT_PAY → PAY_SUCCESS → REFUND（payment 阶段接入）
 | 消费幂等 | 幂等表 `uk_biz(biz_type,biz_id)` | ORDER_CREATE/messageId 同事务先行插入 |
 | 订单唯一 | `uk_order_no`、`uk_active` | 数据层兜底 |
 | 状态幂等 | 状态机 + `version` CAS | 重复取消/关单/回调无副作用 |
+| 支付成功幂等 | `PAY_SUCCESS + paymentNo` | 同一支付单重复投递只处理一次 |
 | 消息幂等 | 状态前置 + 消息 Key=orderId | CANCEL_ORDER 不重复发布 |
 
 ## 9. 事务边界与异常补偿
@@ -154,17 +179,19 @@ CREATE → WAIT_PAY → PAY_SUCCESS → REFUND（payment 阶段接入）
 | 测试项 | 内容 |
 | --- | --- |
 | CreateOrderConsumerTest | 建单成功（幂等表+订单+明细同事务）、重复消息 ACK、confirm 失败不阻塞、运行时异常重试 |
+| PaySuccessConsumerTest | 首次支付成功、重复消息、金额/字段异常、迟到支付不覆盖 CANCEL/TIMEOUT、基础设施异常重试 |
 | OrderStateMachineTest | 合法流转、非法跳转拒绝、version 冲突不覆盖 |
 | OrderServiceTest | 创建、取消、active_key 写入/释放、pay_deadline=15min |
 | TimeoutCloseTaskTest | 扫描、CAS 关单、active_key 释放、CANCEL_ORDER 发布与失败补发 |
 | IdempotencyTest | 幂等表冲突、uk_active 冲突 |
 | CancelOrderProducerTest | 消息字段/幂等发布 |
 
-真实 MySQL/RocketMQ 联调（双消费组、并发关单与支付、唯一约束）列入 Phase 5 集成测试。
+真实 MySQL/RocketMQ 联调（双消费组、并发关单与支付、唯一约束）已由
+`PaymentCallbackFlowIT` 覆盖首次回调、重复回调、金额异常、验签异常和订单状态闭环。
 
 ---
 
-## 附录 A：跨服务契约变更申请（待评审批准）
+## 附录 A：跨服务契约变更申请（已实施）
 
 建单需要订单金额，当前 `CREATE_ORDER` 冻结消息不含金额，二选一：
 
@@ -173,11 +200,12 @@ CREATE → WAIT_PAY → PAY_SUCCESS → REFUND（payment 阶段接入）
 | **A（推荐）** | `SeckillOrderMessage` 扩展字段 `amount`（分，Long）：seckill-service 预扣成功后携带 sku.price×quantity | 修改 seckill-service 消息 DTO 与发送处（独立小变更）；order-service 直接使用 |
 | B | 新增 seckill 内部接口 `GET /api/v1/seckill/internal/skus?sessionId=&skuId=` 返回价格 | seckill-service 新增查询接口（独立小变更）；order-service 建单时同步查询 |
 
-实施方式：评审批准后作为**独立小变更**追加（本阶段 order-service 编码不修改 seckill-service）。`/internal/pre-deducts/confirm` 已在 Phase 4.4 实现，无需变更。
+实施方式：金额快照契约沿用既有 `CREATE_ORDER` 设计；`/internal/pre-deducts/confirm` 已在 Phase 4.4 实现。
+`PAY_SUCCESS` 事件消费作为本次整体收敛变更已实施，不再是待评审项。
 
-## 附录 B：待评审确认项
+## 附录 B：已确认项
 
-1. 金额来源采用附录 A 方案 A（消息扩展 amount 分）；
+1. 金额来源采用 `CREATE_ORDER.amount`（分）并形成订单金额快照；
 2. 超时关单扫描周期 30s，批量大小 200；
 3. 用户取消接口本阶段实现（WAIT_PAY→CANCEL）；
 4. 关单消息发布失败由补偿任务补发（周期 1 分钟）。

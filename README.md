@@ -35,7 +35,8 @@
 ```text
 execute ─▶ Gateway(鉴权/限流/Canary) ─▶ seckill(Redis Lua 原子扣减+防重)
         ─▶ RocketMQ 事务消息 ─▶ order(建单 WAIT_PAY) ─▶ inventory(DEDUCT 分桶+流水)
-        ─▶ payment(创建支付) ─▶ 取消/超时 ─▶ RECOVER 回补（幂等）
+        ─▶ payment(创建支付/回调验签) ─▶ PAY_SUCCESS ─▶ order(PAY_SUCCESS)
+        ─▶ 取消/超时 ─▶ RECOVER 回补（幂等）
 ```
 
 **一致性设计**：
@@ -43,8 +44,10 @@ execute ─▶ Gateway(鉴权/限流/Canary) ─▶ seckill(Redis Lua 原子扣�
 - Redis Lua 原子扣减，`seckill:user:{sku}:{uid}` 防重 → 杜绝超卖与重复购买；
 - `inventory_bucket` 分桶（N=8）解除单 SKU 行锁热点；
 - `stock_flow` 唯一幂等（biz_type + biz_id）→ 重复消息只生效一次；
-- MySQL 为最终库存事实源，Redis == SUM(bucket.available) 由对账校验；
-- Redis 丢失可预热恢复，故障可 repair（REPAIR 流水留痕）。
+- MySQL 为最终库存事实源，`Redis.available == SUM(bucket.available) == inventory.available` 由对账校验；
+- `available_stock + locked_stock == total_stock` 作为库存不变量；
+- Redis 丢失可按 MySQL `available_stock` 预热恢复，故障可 repair（REPAIR 流水留痕）；
+- payment 回调完成验签、时间窗和金额校验后发布 `PAY_SUCCESS`，order-service 以 `paymentNo` 幂等消费并写入 `paid_at`。
 
 ---
 
@@ -72,12 +75,16 @@ execute ─▶ Gateway(鉴权/限流/Canary) ─▶ seckill(Redis Lua 原子扣�
 | 单元测试     | 365 个，0 failure / 0 error                         |
 | 集成测试     | 22 个 IT 类（真实 MySQL/Redis/RocketMQ）            |
 | 故障演练     | 6 类（Redis/MySQL/MQ/服务）                         |
-| Gateway 容量 | 单实例 700-900 QPS（隔离拓扑，p99≤500ms）           |
-| E2E 10000    | L-07 实跑 PASS（零超卖 / deadlock=0 / 幂等 / 恢复） |
+| Gateway 容量 | 安全档约 727.90 QPS（200 并发，p99=390ms，error=0） |
+| Redis Lua    | 1847.57 QPS（单机 Testcontainers 基线）             |
+| 分桶 N=8     | 约 360.18 QPS，5000 条约 13.9s 收敛                |
+| E2E 10000    | 历史 L-07 实跑 PASS（零超卖 / 零死锁 / 幂等 / 恢复） |
 | Canary 窗口  | 113 万请求 / 5% 分流 4.97% / error=0                |
-| 分桶 N=8     | H-01 消费 360 QPS，死锁 0                           |
 | 回滚 RTO     | Gateway 100→0 < 5min（实测毫秒级）                  |
 | 提交数       | 220+ commits（单一职责、可审计）                    |
+
+> 以上容量数字来自隔离拓扑或本机 Testcontainers 压测，不能直接等价为生产容量。
+> 当前回归重点是支付回调闭环和 Redis 丢失恢复，未重新执行容量压测，未补填 CPU、内存、Redis QPS 时间序列或 MQ TPS。
 
 ---
 
@@ -152,15 +159,17 @@ mvn -pl integration-test -am test -Dtest=ProductionScaleValidationTest \
 | Production Canary     | ⏳ PENDING  | 需生产数据中心流量窗口                            |
 | Operations Sign-off   | ⏳ PENDING  | 需运营 Owner 签署                                 |
 
-**结论：工程与正确性验证全部完成；剩余阻塞全部来自外部生产验证资源，
-非代码缺陷。** 个人项目按 [A1-A5 执行指南](docs/06-production/personal-project-a1-a5-execution-guide.md) 约 1-2 天可完成"可演示上线"。
+**结论：当前代码已完成支付成功到订单状态的闭环，并通过对应单测和集成回归；
+剩余门禁主要是独立容量、生产规格 MQ、真实生产 Canary、依赖扫描和运营签核。**
+这些条件不能由本地 Docker 测试替代。个人项目可按 [A1-A5 执行指南](docs/06-production/personal-project-a1-a5-execution-guide.md)
+完成可演示部署，但不应据此宣称生产 GA。
 
 ---
 
 ## 七、已知限制
 
-- order-service `PAY_SUCCESS` 消费端未实现（不影响秒杀主链路，Phase 5.6 登记）；
-- Redis 无持久化：恢复依赖预热 + 对账 + repair（已演练）；
+- `REFUND_SUCCESS` 到 order-service `REFUND` 的事件闭环尚未接入，退款仍是后续工作；
+- Redis 无持久化：恢复依赖预热 + 对账 + repair（本次已按 `available_stock` 演练）；
 - recover 契约无 userId（登记项）；
 - 混沌全量同 JVM 连续执行存在 MQ 收敛级联伪影（生产演练按类隔离执行）；
 - 演示部署使用 root 账号与演示密钥，生产必须替换。
@@ -173,7 +182,7 @@ mvn -pl integration-test -am test -Dtest=ProductionScaleValidationTest \
 | -------------- | ------------------------------------------------------------------------------------ |
 | 需求/架构/设计 | `docs/01-需求分析`、`docs/02-架构设计`、`docs/03-详细设计`                           |
 | 测试报告       | `docs/04-测试报告`、`docs/04-测试体系`                                               |
-| 性能优化       | `docs/05-性能优化`（Phase 6.0-6.5 报告）                                             |
+| 性能优化       | `docs/05-性能优化`（Phase 6.0-6.5 报告、性能证据矩阵）                                  |
 | 生产/发布      | `docs/06-production`（GA 审计、Canary、回滚、操作手册）                              |
 | Release        | `docs/07-release`                                                                    |
 | 证据索引       | [docs/06-production/INDEX.md](docs/06-production/INDEX.md)                           |
