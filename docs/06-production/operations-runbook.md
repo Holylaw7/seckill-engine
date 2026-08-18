@@ -17,7 +17,7 @@
 | inventory-service | 8085 | 库存扣减/恢复/对账 |
 | MySQL | 3306 | 业务库（5 个 schema） |
 | Redis | 6379 | 库存/防重/限流 |
-| RocketMQ namesrv / broker | 9876 / 10911 | 事务消息 |
+| RocketMQ namesrv / broker | 9876/9877 / 10911/10921 | 演示单节点；生产双 NameServer + SYNC_MASTER/SLAVE |
 
 ---
 
@@ -138,6 +138,21 @@ seckill:
 ```
 
 > 生产必须替换所有演示密钥/口令（Gateway JWT、internal-auth、MySQL root）。
+> nonce 防重放使用 Redis `SET NX EX`（60 秒）；Redis 不可用时内部请求 fail-closed。
+
+### 生产拓扑与密钥
+
+生产部署使用独立文件，不使用演示 Compose 的默认值：
+
+```bash
+# 先由 Vault/KMS/云密钥管理系统注入以下环境变量
+./scripts/validate-production-env.sh
+docker compose -f docker/docker-compose.production.yml config --quiet
+docker compose -f docker/docker-compose.production.yml up -d --build
+```
+
+生产 Compose 包含两个 NameServer 和同一 `broker-a` 的同步主从 Broker。
+同一台物理机上的容器只能验证配置与基础复制，不能替代跨节点/跨可用区部署。
 
 ---
 
@@ -176,6 +191,13 @@ curl -X POST http://localhost:8080/api/v1/payments/create \
 curl -X POST http://localhost:8080/api/v1/orders/<ORDER_NO>/cancel \
   -H "Authorization: Bearer <TOKEN>"
 ```
+
+### 退款成功闭环
+
+退款单成功后，payment-service 在本地事务提交后发布 `REFUND_SUCCESS`；
+order-service 校验订单归属和金额后按 `refundNo` 幂等执行 `PAY_SUCCESS → REFUND`。
+发送失败或进程在提交后退出时，`payment_refund.order_notify_status=PENDING`，
+由退款补偿任务重试，不需要人工重复调用退款接口。
 
 ---
 

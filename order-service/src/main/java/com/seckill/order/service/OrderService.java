@@ -14,6 +14,7 @@ import com.seckill.order.dto.CreateOrderMessage;
 import com.seckill.order.dto.OrderDetailResponse;
 import com.seckill.order.dto.OrderStatusResponse;
 import com.seckill.order.dto.PaySuccessMessage;
+import com.seckill.order.dto.RefundSuccessMessage;
 import com.seckill.order.entity.Idempotent;
 import com.seckill.order.entity.OrderItem;
 import com.seckill.order.entity.SeckillOrder;
@@ -162,6 +163,57 @@ public class OrderService {
     }
 
     /**
+     * 消费 REFUND_SUCCESS：仅允许 PAY_SUCCESS → REFUND，按 refundNo 幂等。
+     *
+     * <p>退款事件可能早于 PAY_SUCCESS 消费到达；此时抛出运行时异常交给 MQ 重试，
+     * 避免把订单错误地确认成退款完成。</p>
+     */
+    @Transactional
+    public void processRefundSuccess(RefundSuccessMessage message) {
+        validateRefundSuccessMessage(message);
+        SeckillOrder order = orderMapper.selectOne(new LambdaQueryWrapper<SeckillOrder>()
+                .eq(SeckillOrder::getOrderNo, message.getOrderNo()));
+        if (order == null) {
+            throw new BusinessException(ErrorCode.ORDER_NOT_FOUND,
+                    "退款成功事件对应订单不存在：" + message.getOrderNo());
+        }
+        if (!message.getUserId().equals(order.getUserId())) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "退款成功事件用户与订单不匹配");
+        }
+        if (order.getOrderAmount().compareTo(message.getAmount()) != 0) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "退款成功事件金额与订单快照不匹配");
+        }
+        if (OrderConstants.STATUS_REFUND.equals(order.getOrderStatus())) {
+            log.info("refund success already applied, refundNo={}, orderNo={}",
+                    message.getRefundNo(), message.getOrderNo());
+            return;
+        }
+        if (!OrderConstants.STATUS_PAY_SUCCESS.equals(order.getOrderStatus())) {
+            throw new IllegalStateException("订单尚未处于 PAY_SUCCESS，等待退款事件重试："
+                    + message.getOrderNo() + ", status=" + order.getOrderStatus());
+        }
+
+        if (!markRefundSuccessIdempotent(message)) {
+            log.info("duplicate refund success event ignored, refundNo={}, orderNo={}",
+                    message.getRefundNo(), message.getOrderNo());
+            return;
+        }
+
+        boolean updated = orderStateMachine.transition(
+                order, OrderConstants.STATUS_REFUND, "退款成功");
+        if (updated) {
+            return;
+        }
+
+        SeckillOrder latest = orderMapper.selectOne(new LambdaQueryWrapper<SeckillOrder>()
+                .eq(SeckillOrder::getOrderNo, message.getOrderNo()));
+        if (latest != null && OrderConstants.STATUS_REFUND.equals(latest.getOrderStatus())) {
+            return;
+        }
+        throw new IllegalStateException("订单退款状态 CAS 冲突，等待 MQ 重试：" + message.getOrderNo());
+    }
+
+    /**
      * 用户取消（仅 WAIT_PAY；事务内流转 + 释放 active_key）。
      */
     @Transactional
@@ -256,6 +308,22 @@ public class OrderService {
         }
     }
 
+    private boolean markRefundSuccessIdempotent(RefundSuccessMessage message) {
+        try {
+            Idempotent idempotent = new Idempotent();
+            idempotent.setId(snowflakeIdGenerator.nextId());
+            idempotent.setBizType(OrderConstants.BIZ_TYPE_REFUND_SUCCESS);
+            idempotent.setBizId(message.getRefundNo());
+            idempotent.setUserId(message.getUserId());
+            idempotent.setResultCode(OrderConstants.STATUS_REFUND);
+            idempotent.setStatus(1);
+            idempotentMapper.insert(idempotent);
+            return true;
+        } catch (DuplicateKeyException e) {
+            return false;
+        }
+    }
+
     private static void validatePaySuccessMessage(PaySuccessMessage message) {
         if (message == null
                 || isBlank(message.getPaymentNo())
@@ -265,6 +333,20 @@ public class OrderService {
                 || message.getAmount() == null
                 || message.getAmount().signum() <= 0) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "PAY_SUCCESS 消息字段不完整");
+        }
+    }
+
+    private static void validateRefundSuccessMessage(RefundSuccessMessage message) {
+        if (message == null
+                || isBlank(message.getMessageId())
+                || isBlank(message.getRefundNo())
+                || isBlank(message.getPaymentNo())
+                || isBlank(message.getOrderNo())
+                || message.getUserId() == null
+                || message.getAmount() == null
+                || message.getAmount().signum() <= 0
+                || isBlank(message.getChannelRefundNo())) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "REFUND_SUCCESS 消息字段不完整");
         }
     }
 

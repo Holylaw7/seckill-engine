@@ -2,9 +2,9 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 文档版本 | v1.0（评审稿） |
-| 状态 | 待评审 |
-| 日期 | 2026-08-01 |
+| 文档版本 | v1.1（退款闭环与生产拓扑补充） |
+| 状态 | 已评审，核心消息契约已实施 |
+| 日期 | 2026-08-18 |
 | 关联基线 | 架构基线 v1.0（8.1 Topic 冻结）、数据库设计（pre_deduct/idempotent）、Redis 设计 |
 
 ---
@@ -35,6 +35,8 @@
 | `CREATE_ORDER` | 预扣成功后异步建单 | 事务消息 | seckill-service | order-service |
 | `CANCEL_ORDER` | 取消/超时/退款触发回补 | 普通可靠消息 | order-service / payment-service | inventory-service |
 | `STOCK_RECOVER` | 库存回补指令/结果 | 普通可靠消息 | 对账/补偿任务 | inventory-service |
+| `PAY_SUCCESS` | 支付成功后更新订单状态 | 普通可靠消息 | payment-service | order-service |
+| `REFUND_SUCCESS` | 退款成功后更新订单状态 | 普通可靠消息 | payment-service | order-service |
 
 **消息结构（冻结基础六字段 + 扩展字段）：**
 
@@ -174,11 +176,16 @@
 
 ```text
 取消/超时（order-service）→ 发布 CANCEL_ORDER
-退款成功（payment-service）→ 发布 CANCEL_ORDER(reason=REFUND)
+退款成功（payment-service）→ 发布 REFUND_SUCCESS
+order-service 消费 REFUND_SUCCESS → PAY_SUCCESS→REFUND
 inventory-service 消费：
   写 RECOVER 流水（uk_biz 幂等）→ 更新事实库存
   → Lua 回补 Redis（校验 ≤ total）→ 按场次配置删除购买标记
 ```
+
+`REFUND_SUCCESS` 由 payment-service 在退款本地事务提交后发布；`payment_refund.order_notify_status`
+记录 `PENDING/SENT`，发送失败由补偿扫描重试。order-service 以 `refundNo` 为幂等键，
+因此提交后重复发送不会重复流转订单。
 
 ### 9.3 人工补偿
 
@@ -190,7 +197,7 @@ inventory-service 消费：
 | 风险 | 防护 |
 | --- | --- |
 | 半消息丢失 | Broker 持久化 + 回查机制 |
-| Broker 宕机 | 主从同步 + 发送重试 |
+| Broker 宕机 | 生产拓扑采用双 NameServer + SYNC_MASTER/SLAVE；应用发送有限重试，仍需独立环境故障切换验证 |
 | 本地事务与消息不一致 | 事务消息语义保证 |
 | 消费处理中宕机（未提交位点） | 位点不提交，重启后重投 |
 | 重复投递/重复消费 | 消费幂等（幂等表 + 唯一约束） |
@@ -214,3 +221,20 @@ inventory-service 消费：
 2. **批量消费/批量发送**：压测后按吞吐评估；
 3. **分区扩容**：分区数 > 消费实例数，支持水平扩容；
 4. **顺序性**：当前不依赖全局顺序；未来若需要，按 `orderId` 哈希选择队列。
+
+## 13. 生产 HA 拓扑
+
+仓库提供 `docker/docker-compose.production.yml` 作为生产部署基线：
+
+```text
+NameServer-1 ─┐
+              ├─ broker-a / SYNC_MASTER
+NameServer-2 ─┘        │
+                       └─ broker-a / SLAVE
+```
+
+- 所有业务服务使用两个 NameServer 地址；
+- Master 使用 `SYNC_MASTER + SYNC_FLUSH`，Slave 使用同名 `broker-a`、`brokerId=1`；
+- Broker store、日志和 Redis/MySQL 数据均使用持久卷；
+- Compose 同机运行仅验证配置、启动依赖和基础复制拓扑，不等于跨主机/跨可用区容灾；
+- 正式上线还需在不同故障域部署 Namesrv/Broker，并验证主节点故障、消息积压、重试和 DLQ 收敛。

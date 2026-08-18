@@ -7,6 +7,7 @@ public final class PaymentConstants {
 
     public static final String MQ_TOPIC = "seckill-order-tx";
     public static final String TAG_PAY_SUCCESS = "PAY_SUCCESS";
+    public static final String TAG_REFUND_SUCCESS = "REFUND_SUCCESS";
 
     public static final String STATUS_CREATE = "CREATE";
     public static final String STATUS_WAIT_PAY = "WAIT_PAY";
@@ -18,6 +19,8 @@ public final class PaymentConstants {
     public static final String REFUND_STATUS_REFUNDING = "REFUNDING";
     public static final String REFUND_STATUS_SUCCESS = "REFUND_SUCCESS";
     public static final String REFUND_STATUS_FAILED = "REFUND_FAILED";
+    public static final String REFUND_NOTIFY_PENDING = "PENDING";
+    public static final String REFUND_NOTIFY_SENT = "SENT";
 
     public static final String CHANNEL_MOCK = "MOCK";
     public static final String CHANNEL_WECHAT = "WECHAT";

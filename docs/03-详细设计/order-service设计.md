@@ -2,9 +2,9 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 文档版本 | v1.2（设计已评审 + PAY_SUCCESS 已实施） |
-| 状态 | 已评审，支付成功消费闭环已实现 |
-| 日期 | 2026-08-17 |
+| 文档版本 | v1.3（支付/退款事件闭环已实施） |
+| 状态 | 已评审，`PAY_SUCCESS` 与 `REFUND_SUCCESS` 消费闭环已实现 |
+| 日期 | 2026-08-18 |
 | 关联基线 | 需求基线 v1.0（订单状态机、BR-04）/ 架构基线 v1.0 / 详细设计基线 v1.0（数据库/MQ/接口/事务边界） |
 | 前置依赖 | seckill-common、seckill-service（`/internal/pre-deducts/confirm` 已实现） |
 | 变更记录 | v1.0 评审稿；v1.1 冻结补充：金额快照、状态机唯一入口、取消约束、超时关闭参数、CANCEL_ORDER 补偿 |
@@ -119,7 +119,25 @@ order-service 消费处理规则：
 7. CAS 发生竞态时重新读取订单：终态可确认则 ACK，否则抛出运行时异常交由 MQ 重试；
 8. 字段或业务数据异常记录并 ACK，数据库、MQ 等基础设施异常不吞掉，交由重试机制处理。
 
-`REFUND_SUCCESS → order REFUND` 事件仍未接入，保留为后续退款闭环工作。
+### 6.2 REFUND_SUCCESS 消费闭环（已实施）
+
+payment-service 退款本地事务提交后发布：
+
+| 项 | 内容 |
+| --- | --- |
+| Topic / Tag | `seckill-order-tx` / `REFUND_SUCCESS` |
+| Consumer Group | `order-refund-success-consumer` |
+| 事件字段 | `messageId / refundNo / paymentNo / orderNo / userId / amount / channelRefundNo / timestamp` |
+| 业务幂等键 | `biz_type=REFUND_SUCCESS`、`biz_id=refundNo` |
+
+order-service 消费处理规则：
+
+1. 校验 `refundNo`、`paymentNo`、`orderNo`、`userId`、正金额和渠道退款号；
+2. 查询订单并校验用户归属与金额快照；
+3. 仅允许 `PAY_SUCCESS → REFUND`，退款事件早于支付成功事件时抛出运行时异常，交由 MQ 重试；
+4. 首次事件在订单库事务内写入幂等记录并执行状态机 CAS；
+5. 同一 `refundNo` 重复投递无副作用；CAS 竞争以重新读取的终态为准；
+6. 消息字段/业务数据非法记录并 ACK，数据库或 MQ 基础设施异常不吞掉，交由重试机制处理。
 
 ## 7. CANCEL_ORDER 发布
 
@@ -137,6 +155,7 @@ order-service 消费处理规则：
 | 订单唯一 | `uk_order_no`、`uk_active` | 数据层兜底 |
 | 状态幂等 | 状态机 + `version` CAS | 重复取消/关单/回调无副作用 |
 | 支付成功幂等 | `PAY_SUCCESS + paymentNo` | 同一支付单重复投递只处理一次 |
+| 退款成功幂等 | `REFUND_SUCCESS + refundNo` | 同一退款单重复投递只处理一次 |
 | 消息幂等 | 状态前置 + 消息 Key=orderId | CANCEL_ORDER 不重复发布 |
 
 ## 9. 事务边界与异常补偿
@@ -187,7 +206,8 @@ order-service 消费处理规则：
 | CancelOrderProducerTest | 消息字段/幂等发布 |
 
 真实 MySQL/RocketMQ 联调（双消费组、并发关单与支付、唯一约束）已由
-`PaymentCallbackFlowIT` 覆盖首次回调、重复回调、金额异常、验签异常和订单状态闭环。
+`PaymentCallbackFlowIT` 覆盖首次回调、重复回调、金额异常、验签异常和订单状态闭环；
+`RefundSuccessConsumerTest` 覆盖退款事件字段校验、成功流转和重复消费。
 
 ---
 

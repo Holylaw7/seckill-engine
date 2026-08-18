@@ -1,6 +1,6 @@
-# Phase 6.5.1 Production Configuration Baseline
+# Production Configuration Baseline
 
-> 冻结时间：2026-08-05；分支：phase6.5
+> 更新：2026-08-18；分支：release/RC1
 > 用途：生产启动配置可审计基线；同环境启动必须与以下配置一致。
 
 ## 1. 配置校验和（SHA-256）
@@ -48,10 +48,17 @@
 
 | 项 | 值 |
 | --- | --- |
+| NameServer | ≥2（生产 Compose：`rocketmq-namesrv-1/2`） |
+| Broker | 同一 `brokerName` 的 `SYNC_MASTER` + `SLAVE` |
+| Master flush | `SYNC_FLUSH` |
+| 生产配置文件 | `docker/docker-compose.production.yml`、`docker/broker-master.conf`、`docker/broker-slave.conf` |
 | seckill producer retry | 2（有限重试） |
 | seckill producer send timeout | 3000ms |
 | 消费并发 | order-consumer=16，inventory-consumer=8（Phase 6.1 冻结） |
 | consumer maxReconsumeTimes | 默认 16（建议生产 3-5 + DLQ，登记） |
+
+> Compose 同机仅验证拓扑配置和启动依赖；生产必须跨独立节点/可用区部署，
+> 再执行 Broker 故障切换、积压、重试和 DLQ 收敛验证。
 
 ## 6. Inventory 分桶（生产目标）
 
@@ -64,3 +71,6 @@
 
 - 配置变更必须更新校验和并走评审；
 - 生产环境由配置中心下发，本地 yml 为基线模板；启动前以校验和比对。
+- 生产密钥不得使用 `.env.example` 默认值；由外部密钥管理系统注入，并先执行
+  `scripts/validate-production-env.ps1` 或 `scripts/validate-production-env.sh`。
+- 内部接口 nonce 使用 Redis 共享 `SET NX EX`，生产 Redis 必须采用高可用部署。

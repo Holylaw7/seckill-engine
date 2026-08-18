@@ -1,22 +1,21 @@
-name: seckill-engine
+name: seckill-engine-production
 
-# 演示部署（Phase 6.24）：全链路一键启动
-# 用法：docker compose -f docker/docker-compose.yml up -d --build
-# 访问：Gateway http://localhost:8080
-# 注意：默认密码与内部密钥仅用于演示，生产必须通过 .env 或密钥管理系统替换
+# 生产拓扑：双 NameServer + RocketMQ SYNC_MASTER/SLAVE。
+# 所有密钥必须由外部密钥管理系统注入环境变量，禁止使用 .env.example 的演示值。
+# 启动前：
+#   powershell -ExecutionPolicy Bypass -File scripts/validate-production-env.ps1
+#   docker compose -f docker/docker-compose.production.yml config --quiet
+#   docker compose -f docker/docker-compose.production.yml up -d --build
 
 services:
   mysql:
     image: mysql:8.0.36
-    container_name: seckill-mysql-compose
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-seckill-root}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD must be injected}
       TZ: ${TZ:-Asia/Shanghai}
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_0900_ai_ci
-    ports:
-      - "3306:3306"
     volumes:
-      - mysql-data:/var/lib/mysql
+      - mysql-production-data:/var/lib/mysql
       - ../sql/auth-service/V1.0__init.sql:/docker-entrypoint-initdb.d/10-auth.sql:ro
       - ../sql/seckill-service/V1.0__init.sql:/docker-entrypoint-initdb.d/20-seckill.sql:ro
       - ../sql/inventory-service/V1.0__init.sql:/docker-entrypoint-initdb.d/30-inventory.sql:ro
@@ -25,8 +24,6 @@ services:
       - ../sql/order-service/V1.0__init.sql:/docker-entrypoint-initdb.d/40-order.sql:ro
       - ../sql/payment-service/V1.0__init.sql:/docker-entrypoint-initdb.d/50-payment.sql:ro
       - ../sql/payment-service/V2__refund_order_notify.sql:/docker-entrypoint-initdb.d/51-payment-refund-notify.sql:ro
-      - ../sql/test-data/seckill-test.sql:/docker-entrypoint-initdb.d/90-seckill-test.sql:ro
-      - ../sql/test-data/inventory-test.sql:/docker-entrypoint-initdb.d/91-inventory-test.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
       interval: 10s
@@ -36,9 +33,6 @@ services:
 
   redis:
     image: redis:7.2.4-alpine
-    container_name: seckill-redis-compose
-    ports:
-      - "6379:6379"
     command:
       - redis-server
       - --appendonly
@@ -52,7 +46,7 @@ services:
       - --save
       - "60 10000"
     volumes:
-      - redis-data:/data
+      - redis-production-data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -60,13 +54,12 @@ services:
       retries: 20
       start_period: 5s
 
-  rocketmq-namesrv:
+  rocketmq-namesrv-1:
     image: apache/rocketmq:5.3.1
-    container_name: seckill-rmq-namesrv-compose
     user: root
     volumes:
       - ./rocketmq-runtime-entrypoint.sh:/usr/local/bin/rocketmq-runtime-entrypoint.sh:ro
-      - rocketmq-namesrv-logs:/home/rocketmq/logs
+      - rocketmq-namesrv-1-logs:/home/rocketmq/logs
     command: ["bash", "/usr/local/bin/rocketmq-runtime-entrypoint.sh", "sh", "mqnamesrv"]
     ports:
       - "9876:9876"
@@ -77,32 +70,87 @@ services:
       retries: 20
       start_period: 15s
 
-  rocketmq-broker:
+  rocketmq-namesrv-2:
     image: apache/rocketmq:5.3.1
-    container_name: seckill-rmq-broker-compose
+    user: root
+    volumes:
+      - ./rocketmq-runtime-entrypoint.sh:/usr/local/bin/rocketmq-runtime-entrypoint.sh:ro
+      - rocketmq-namesrv-2-logs:/home/rocketmq/logs
+    command: ["bash", "/usr/local/bin/rocketmq-runtime-entrypoint.sh", "sh", "mqnamesrv"]
+    ports:
+      - "9877:9876"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/9876'"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 15s
+
+  rocketmq-broker-master:
+    image: apache/rocketmq:5.3.1
     depends_on:
-      rocketmq-namesrv:
+      rocketmq-namesrv-1:
+        condition: service_healthy
+      rocketmq-namesrv-2:
         condition: service_healthy
     environment:
       JAVA_OPT_EXT: "-Xms512m -Xmx1g -XX:+UseG1GC"
     user: root
     volumes:
-      - ./broker.conf:/home/rocketmq/broker.conf:ro
+      - ./broker-master.conf:/home/rocketmq/broker.conf:ro
       - ./rocketmq-runtime-entrypoint.sh:/usr/local/bin/rocketmq-runtime-entrypoint.sh:ro
-      - rocketmq-broker-store:/home/rocketmq/store
-      - rocketmq-broker-logs:/home/rocketmq/logs
+      - rocketmq-broker-master-store:/home/rocketmq/store
+      - rocketmq-broker-master-logs:/home/rocketmq/logs
     command:
       - bash
       - /usr/local/bin/rocketmq-runtime-entrypoint.sh
       - sh
       - mqbroker
       - -n
-      - rocketmq-namesrv:9876
+      - rocketmq-namesrv-1:9876;rocketmq-namesrv-2:9876
       - -c
       - /home/rocketmq/broker.conf
     ports:
       - "10911:10911"
       - "10909:10909"
+      - "10912:10912"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/10911'"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
+
+  rocketmq-broker-slave:
+    image: apache/rocketmq:5.3.1
+    depends_on:
+      rocketmq-namesrv-1:
+        condition: service_healthy
+      rocketmq-namesrv-2:
+        condition: service_healthy
+      rocketmq-broker-master:
+        condition: service_healthy
+    environment:
+      JAVA_OPT_EXT: "-Xms512m -Xmx1g -XX:+UseG1GC"
+    user: root
+    volumes:
+      - ./broker-slave.conf:/home/rocketmq/broker.conf:ro
+      - ./rocketmq-runtime-entrypoint.sh:/usr/local/bin/rocketmq-runtime-entrypoint.sh:ro
+      - rocketmq-broker-slave-store:/home/rocketmq/store
+      - rocketmq-broker-slave-logs:/home/rocketmq/logs
+    command:
+      - bash
+      - /usr/local/bin/rocketmq-runtime-entrypoint.sh
+      - sh
+      - mqbroker
+      - -n
+      - rocketmq-namesrv-1:9876;rocketmq-namesrv-2:9876
+      - -c
+      - /home/rocketmq/broker.conf
+    ports:
+      - "10921:10911"
+      - "10919:10909"
+      - "10922:10912"
     healthcheck:
       test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/10911'"]
       interval: 5s
@@ -116,8 +164,7 @@ services:
       dockerfile: docker/Dockerfile
       args:
         MODULE: gateway
-    image: seckill/gateway:rc1
-    container_name: seckill-gateway-compose
+    image: seckill/gateway:production
     depends_on:
       auth:
         condition: service_started
@@ -136,12 +183,12 @@ services:
     command:
       - "--spring.data.redis.host=redis"
       - "--spring.data.redis.port=6379"
-      - "--seckill.gateway.jwt.secret=${SECKILL_JWT_SECRET:-seckill-engine-dev-secret-change-me}"
+      - "--seckill.gateway.jwt.secret=${SECKILL_JWT_SECRET:?SECKILL_JWT_SECRET must be injected}"
       - "--seckill.gateway.canary.enabled=${CANARY_ENABLED:-true}"
       - "--seckill.gateway.canary.weight=${CANARY_WEIGHT:-5}"
-      - "--seckill.gateway.canary.version=RC1"
+      - "--seckill.gateway.canary.version=production"
       - "--seckill.gateway.canary.control-enabled=${CANARY_CONTROL_ENABLED:-true}"
-      - "--seckill.gateway.canary.control-token=${CANARY_CONTROL_TOKEN:-dev-canary-token}"
+      - "--seckill.gateway.canary.control-token=${CANARY_CONTROL_TOKEN:?CANARY_CONTROL_TOKEN must be injected}"
       - "--spring.cloud.gateway.routes[0].id=auth-service"
       - "--spring.cloud.gateway.routes[0].uri=http://auth:8081"
       - "--spring.cloud.gateway.routes[0].predicates[0]=Path=/api/v1/auth/**"
@@ -161,8 +208,7 @@ services:
       dockerfile: docker/Dockerfile
       args:
         MODULE: auth-service
-    image: seckill/auth:rc1
-    container_name: seckill-auth-compose
+    image: seckill/auth:production
     depends_on:
       mysql:
         condition: service_healthy
@@ -171,10 +217,10 @@ services:
     command:
       - "--spring.datasource.url=jdbc:mysql://mysql:3306/seckill_auth?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai"
       - "--spring.datasource.username=root"
-      - "--spring.datasource.password=${MYSQL_ROOT_PASSWORD:-seckill-root}"
+      - "--spring.datasource.password=${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD must be injected}"
       - "--spring.data.redis.host=redis"
       - "--spring.data.redis.port=6379"
-      - "--seckill.auth.jwt.secret=${SECKILL_JWT_SECRET:-seckill-engine-dev-secret-change-me}"
+      - "--seckill.auth.jwt.secret=${SECKILL_JWT_SECRET:?SECKILL_JWT_SECRET must be injected}"
 
   seckill:
     build:
@@ -182,34 +228,37 @@ services:
       dockerfile: docker/Dockerfile
       args:
         MODULE: seckill-service
-    image: seckill/seckill:rc1
-    container_name: seckill-seckill-compose
+    image: seckill/seckill:production
     depends_on:
       mysql:
         condition: service_healthy
       redis:
         condition: service_healthy
-      rocketmq-namesrv:
+      rocketmq-namesrv-1:
         condition: service_healthy
-      rocketmq-broker:
+      rocketmq-namesrv-2:
+        condition: service_healthy
+      rocketmq-broker-master:
+        condition: service_healthy
+      rocketmq-broker-slave:
         condition: service_healthy
       auth:
         condition: service_started
     command:
       - "--spring.datasource.url=jdbc:mysql://mysql:3306/seckill_seckill?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai"
       - "--spring.datasource.username=root"
-      - "--spring.datasource.password=${MYSQL_ROOT_PASSWORD:-seckill-root}"
+      - "--spring.datasource.password=${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD must be injected}"
       - "--spring.data.redis.host=redis"
       - "--spring.data.redis.port=6379"
-      - "--rocketmq.name-server=rocketmq-namesrv:9876"
+      - "--rocketmq.name-server=rocketmq-namesrv-1:9876;rocketmq-namesrv-2:9876"
       - "--seckill.core.risk-check.enabled=false"
       - "--seckill.core.risk-check.base-url=http://auth:8081"
       - "--inventory.sharding.enabled=true"
       - "--inventory.sharding.bucket-count=8"
       - "--seckill.internal-auth.enabled=true"
-      - "--seckill.internal-auth.clients.order-service=${ORDER_SERVICE_SECRET:-dev-order-secret}"
-      - "--seckill.internal-auth.clients.inventory-service=${INVENTORY_SERVICE_SECRET:-dev-inventory-secret}"
-      - "--seckill.internal-auth.admin-secret=${INTERNAL_ADMIN_SECRET:-dev-admin-secret}"
+      - "--seckill.internal-auth.clients.order-service=${ORDER_SERVICE_SECRET:?ORDER_SERVICE_SECRET must be injected}"
+      - "--seckill.internal-auth.clients.inventory-service=${INVENTORY_SERVICE_SECRET:?INVENTORY_SERVICE_SECRET must be injected}"
+      - "--seckill.internal-auth.admin-secret=${INTERNAL_ADMIN_SECRET:?INTERNAL_ADMIN_SECRET must be injected}"
 
   inventory:
     build:
@@ -217,32 +266,35 @@ services:
       dockerfile: docker/Dockerfile
       args:
         MODULE: inventory-service
-    image: seckill/inventory:rc1
-    container_name: seckill-inventory-compose
+    image: seckill/inventory:production
     depends_on:
       mysql:
         condition: service_healthy
       redis:
         condition: service_healthy
-      rocketmq-namesrv:
+      rocketmq-namesrv-1:
         condition: service_healthy
-      rocketmq-broker:
+      rocketmq-namesrv-2:
+        condition: service_healthy
+      rocketmq-broker-master:
+        condition: service_healthy
+      rocketmq-broker-slave:
         condition: service_healthy
       seckill:
         condition: service_started
     command:
       - "--spring.datasource.url=jdbc:mysql://mysql:3306/seckill_inventory?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai"
       - "--spring.datasource.username=root"
-      - "--spring.datasource.password=${MYSQL_ROOT_PASSWORD:-seckill-root}"
+      - "--spring.datasource.password=${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD must be injected}"
       - "--spring.data.redis.host=redis"
       - "--spring.data.redis.port=6379"
-      - "--rocketmq.name-server=rocketmq-namesrv:9876"
+      - "--rocketmq.name-server=rocketmq-namesrv-1:9876;rocketmq-namesrv-2:9876"
       - "--inventory.sharding.enabled=true"
       - "--inventory.sharding.bucket-count=8"
       - "--seckill.inventory.recover.base-url=http://seckill:8082"
       - "--seckill.internal-auth.enabled=true"
-      - "--seckill.internal-auth.clients.inventory-service=${INVENTORY_SERVICE_SECRET:-dev-inventory-secret}"
-      - "--seckill.internal-auth.admin-secret=${INTERNAL_ADMIN_SECRET:-dev-admin-secret}"
+      - "--seckill.internal-auth.clients.inventory-service=${INVENTORY_SERVICE_SECRET:?INVENTORY_SERVICE_SECRET must be injected}"
+      - "--seckill.internal-auth.admin-secret=${INTERNAL_ADMIN_SECRET:?INTERNAL_ADMIN_SECRET must be injected}"
 
   order:
     build:
@@ -250,25 +302,28 @@ services:
       dockerfile: docker/Dockerfile
       args:
         MODULE: order-service
-    image: seckill/order:rc1
-    container_name: seckill-order-compose
+    image: seckill/order:production
     depends_on:
       mysql:
         condition: service_healthy
-      rocketmq-namesrv:
+      rocketmq-namesrv-1:
         condition: service_healthy
-      rocketmq-broker:
+      rocketmq-namesrv-2:
+        condition: service_healthy
+      rocketmq-broker-master:
+        condition: service_healthy
+      rocketmq-broker-slave:
         condition: service_healthy
       seckill:
         condition: service_started
     command:
       - "--spring.datasource.url=jdbc:mysql://mysql:3306/seckill_order?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai"
       - "--spring.datasource.username=root"
-      - "--spring.datasource.password=${MYSQL_ROOT_PASSWORD:-seckill-root}"
-      - "--rocketmq.name-server=rocketmq-namesrv:9876"
+      - "--spring.datasource.password=${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD must be injected}"
+      - "--rocketmq.name-server=rocketmq-namesrv-1:9876;rocketmq-namesrv-2:9876"
       - "--seckill.order.pre-deduct-confirm.base-url=http://seckill:8082"
       - "--seckill.internal-auth.enabled=true"
-      - "--seckill.internal-auth.clients.order-service=${ORDER_SERVICE_SECRET:-dev-order-secret}"
+      - "--seckill.internal-auth.clients.order-service=${ORDER_SERVICE_SECRET:?ORDER_SERVICE_SECRET must be injected}"
 
   payment:
     build:
@@ -276,25 +331,31 @@ services:
       dockerfile: docker/Dockerfile
       args:
         MODULE: payment-service
-    image: seckill/payment:rc1
-    container_name: seckill-payment-compose
+    image: seckill/payment:production
     depends_on:
       mysql:
         condition: service_healthy
-      rocketmq-namesrv:
+      rocketmq-namesrv-1:
         condition: service_healthy
-      rocketmq-broker:
+      rocketmq-namesrv-2:
+        condition: service_healthy
+      rocketmq-broker-master:
+        condition: service_healthy
+      rocketmq-broker-slave:
         condition: service_healthy
     command:
       - "--spring.datasource.url=jdbc:mysql://mysql:3306/seckill_payment?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai"
       - "--spring.datasource.username=root"
-      - "--spring.datasource.password=${MYSQL_ROOT_PASSWORD:-seckill-root}"
-      - "--rocketmq.name-server=rocketmq-namesrv:9876"
-      - "--seckill.payment.channel.mock.secret=${MOCK_CHANNEL_SECRET:-mock-channel-secret}"
+      - "--spring.datasource.password=${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD must be injected}"
+      - "--rocketmq.name-server=rocketmq-namesrv-1:9876;rocketmq-namesrv-2:9876"
+      - "--seckill.payment.channel.mock.secret=${MOCK_CHANNEL_SECRET:?MOCK_CHANNEL_SECRET must be injected}"
 
 volumes:
-  mysql-data:
-  redis-data:
-  rocketmq-namesrv-logs:
-  rocketmq-broker-store:
-  rocketmq-broker-logs:
+  mysql-production-data:
+  redis-production-data:
+  rocketmq-namesrv-1-logs:
+  rocketmq-namesrv-2-logs:
+  rocketmq-broker-master-store:
+  rocketmq-broker-master-logs:
+  rocketmq-broker-slave-store:
+  rocketmq-broker-slave-logs:

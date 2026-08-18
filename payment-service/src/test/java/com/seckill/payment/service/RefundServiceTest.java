@@ -13,6 +13,7 @@ import com.seckill.payment.dto.RefundRequest;
 import com.seckill.payment.entity.PaymentOrder;
 import com.seckill.payment.entity.PaymentRefund;
 import com.seckill.payment.mapper.PaymentRefundMapper;
+import com.seckill.payment.mq.RefundSuccessProducer;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,12 +21,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -44,6 +47,8 @@ class RefundServiceTest {
     private PaymentChannel paymentChannel;
     @Mock
     private SnowflakeIdGenerator snowflakeIdGenerator;
+    @Mock
+    private RefundSuccessProducer refundSuccessProducer;
 
     private RefundService refundService;
 
@@ -56,7 +61,8 @@ class RefundServiceTest {
     @BeforeEach
     void setUp() {
         refundService = new RefundService(
-                refundMapper, paymentService, channelRouter, snowflakeIdGenerator);
+                refundMapper, paymentService, channelRouter, snowflakeIdGenerator,
+                refundSuccessProducer);
     }
 
     private RefundRequest request() {
@@ -92,6 +98,7 @@ class RefundServiceTest {
         when(paymentChannel.refund(any(RefundChannelRequest.class)))
                 .thenReturn(new RefundChannelResult(true, "MOCK-R-R1"));
         when(paymentService.completeRefundSuccess(any())).thenReturn(true);
+        when(refundSuccessProducer.send(any())).thenReturn(true);
 
         var result = refundService.refund(request());
         assertEquals("REFUND_SUCCESS", result.getStatus());
@@ -158,9 +165,11 @@ class RefundServiceTest {
         when(channelRouter.getChannel("MOCK")).thenReturn(paymentChannel);
         when(paymentChannel.refund(any(RefundChannelRequest.class)))
                 .thenReturn(new RefundChannelResult(true, "MOCK-R-R1"));
+        when(refundSuccessProducer.send(any())).thenReturn(true);
 
         var result = refundService.retryRefund("R1");
         assertEquals("REFUND_SUCCESS", result.getStatus());
+        verify(refundSuccessProducer).send(any());
     }
 
     @Test
@@ -195,6 +204,36 @@ class RefundServiceTest {
     }
 
     @Test
+    void findPendingRefundNotificationsShouldReturnSuccessfulPendingRefunds() {
+        PaymentRefund refund = new PaymentRefund();
+        refund.setRefundNo("R1");
+        refund.setStatus("REFUND_SUCCESS");
+        refund.setOrderNotifyStatus("PENDING");
+        when(refundMapper.selectList(any())).thenReturn(java.util.List.of(refund));
+
+        var result = refundService.findPendingRefundNotifications(10);
+        assertEquals(1, result.size());
+        assertEquals("R1", result.get(0).getRefundNo());
+    }
+
+    @Test
+    void refundSuccessNotificationFailureShouldRemainPending() {
+        when(refundMapper.selectOne(any())).thenReturn(null);
+        when(paymentService.getByPaymentNo("P1")).thenReturn(paySuccessPayment());
+        when(paymentService.startRefund(any())).thenReturn(true);
+        when(snowflakeIdGenerator.nextId()).thenReturn(1L);
+        when(channelRouter.getChannel("MOCK")).thenReturn(paymentChannel);
+        when(paymentChannel.refund(any(RefundChannelRequest.class)))
+                .thenReturn(new RefundChannelResult(true, "MOCK-R-R1"));
+        when(refundSuccessProducer.send(any())).thenReturn(false);
+
+        var result = refundService.refund(request());
+        assertEquals("REFUND_SUCCESS", result.getStatus());
+        verify(refundSuccessProducer).send(any());
+        verify(refundMapper, never()).update(isNull(), any());
+    }
+
+    @Test
     void refundInsertConflictShouldFallbackToExisting() {
         PaymentRefund existing = new PaymentRefund();
         existing.setRefundNo("R1");
@@ -209,5 +248,56 @@ class RefundServiceTest {
         var result = refundService.refund(request());
         assertEquals("REFUNDING", result.getStatus());
         verify(refundMapper, never()).updateById(any(PaymentRefund.class));
+    }
+
+    @Test
+    void successfulRefundShouldMarkOrderNotificationSent() {
+        when(refundMapper.selectOne(any())).thenReturn(null);
+        when(paymentService.getByPaymentNo("P1")).thenReturn(paySuccessPayment());
+        when(paymentService.startRefund(any())).thenReturn(true);
+        when(snowflakeIdGenerator.nextId()).thenReturn(1L);
+        when(channelRouter.getChannel("MOCK")).thenReturn(paymentChannel);
+        when(paymentChannel.refund(any(RefundChannelRequest.class)))
+                .thenReturn(new RefundChannelResult(true, "MOCK-R-R1"));
+        when(refundSuccessProducer.send(any())).thenReturn(true);
+        when(refundMapper.update(isNull(), any())).thenReturn(1);
+
+        refundService.refund(request());
+
+        verify(refundMapper).update(isNull(), any());
+    }
+
+    @Test
+    void refundSuccessNotificationShouldPublishAfterTransactionCommit() {
+        PaymentRefund persisted = new PaymentRefund();
+        persisted.setId(1L);
+        persisted.setRefundNo("R1");
+        persisted.setPaymentNo("P1");
+        persisted.setOrderNo("SO123");
+        persisted.setUserId(10001L);
+        persisted.setAmount(new BigDecimal("99.00"));
+        persisted.setStatus("REFUND_SUCCESS");
+        persisted.setChannelRefundNo("MOCK-R-R1");
+        persisted.setOrderNotifyStatus("PENDING");
+        when(refundMapper.selectOne(any())).thenReturn(null, persisted);
+        when(paymentService.getByPaymentNo("P1")).thenReturn(paySuccessPayment());
+        when(paymentService.startRefund(any())).thenReturn(true);
+        when(snowflakeIdGenerator.nextId()).thenReturn(1L);
+        when(channelRouter.getChannel("MOCK")).thenReturn(paymentChannel);
+        when(paymentChannel.refund(any(RefundChannelRequest.class)))
+                .thenReturn(new RefundChannelResult(true, "MOCK-R-R1"));
+        when(paymentService.completeRefundSuccess(any())).thenReturn(true);
+        when(refundSuccessProducer.send(any())).thenReturn(true);
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            refundService.refund(request());
+            verify(refundSuccessProducer, never()).send(any());
+            TransactionSynchronizationManager.getSynchronizations()
+                    .forEach(synchronization -> synchronization.afterCommit());
+            verify(refundSuccessProducer).send(any());
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
     }
 }

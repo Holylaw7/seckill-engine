@@ -11,6 +11,7 @@ import com.seckill.order.constant.OrderConstants;
 import com.seckill.order.dto.CancelOrderMessage;
 import com.seckill.order.dto.CreateOrderMessage;
 import com.seckill.order.dto.PaySuccessMessage;
+import com.seckill.order.dto.RefundSuccessMessage;
 import com.seckill.order.entity.Idempotent;
 import com.seckill.order.entity.OrderItem;
 import com.seckill.order.entity.SeckillOrder;
@@ -101,6 +102,11 @@ class OrderServiceImplTest {
     private PaySuccessMessage paySuccessMessage() {
         return new PaySuccessMessage("pay-msg-001", "P-001", "123",
                 10001L, new BigDecimal("99.00"), "TXN-001", System.currentTimeMillis());
+    }
+
+    private RefundSuccessMessage refundSuccessMessage() {
+        return new RefundSuccessMessage("refund-msg-001", "R-001", "P-001", "123",
+                10001L, new BigDecimal("99.00"), "R-TXN-001", System.currentTimeMillis());
     }
 
     @Test
@@ -236,6 +242,59 @@ class OrderServiceImplTest {
 
         assertThrows(IllegalStateException.class,
                 () -> orderService.processPaySuccess(paySuccessMessage()));
+    }
+
+    @Test
+    void refundSuccessShouldTransitionPaidOrder() {
+        SeckillOrder order = waitPayOrder();
+        order.setOrderStatus(OrderConstants.STATUS_PAY_SUCCESS);
+        when(orderMapper.selectOne(any())).thenReturn(order);
+        when(orderMapper.update(isNull(), any())).thenReturn(1);
+
+        orderService.processRefundSuccess(refundSuccessMessage());
+
+        ArgumentCaptor<Idempotent> captor = ArgumentCaptor.forClass(Idempotent.class);
+        verify(idempotentMapper).insert(captor.capture());
+        assertEquals(OrderConstants.BIZ_TYPE_REFUND_SUCCESS, captor.getValue().getBizType());
+        assertEquals("R-001", captor.getValue().getBizId());
+        verify(orderMapper).update(isNull(), any());
+    }
+
+    @Test
+    void duplicateRefundSuccessShouldNotTransitionAgain() {
+        SeckillOrder order = waitPayOrder();
+        order.setOrderStatus(OrderConstants.STATUS_PAY_SUCCESS);
+        when(orderMapper.selectOne(any())).thenReturn(order);
+        doThrow(new DuplicateKeyException("duplicate"))
+                .when(idempotentMapper).insert(any(Idempotent.class));
+
+        orderService.processRefundSuccess(refundSuccessMessage());
+
+        verify(orderMapper, never()).update(isNull(), any());
+    }
+
+    @Test
+    void refundSuccessBeforePaySuccessShouldRetry() {
+        when(orderMapper.selectOne(any())).thenReturn(waitPayOrder());
+
+        assertThrows(IllegalStateException.class,
+                () -> orderService.processRefundSuccess(refundSuccessMessage()));
+        verify(idempotentMapper, never()).insert(any(Idempotent.class));
+    }
+
+    @Test
+    void refundSuccessAmountMismatchShouldBeRejected() {
+        SeckillOrder order = waitPayOrder();
+        order.setOrderStatus(OrderConstants.STATUS_PAY_SUCCESS);
+        when(orderMapper.selectOne(any())).thenReturn(order);
+        RefundSuccessMessage message = refundSuccessMessage();
+        message.setAmount(new BigDecimal("88.00"));
+
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> orderService.processRefundSuccess(message));
+
+        assertEquals(ErrorCode.PARAM_ERROR, e.getErrorCode());
+        verify(idempotentMapper, never()).insert(any(Idempotent.class));
     }
 
     @Test

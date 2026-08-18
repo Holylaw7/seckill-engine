@@ -1,6 +1,6 @@
 # Seckill-Engine
 
-高并发秒杀交易系统：面向瞬时高并发请求，提供**防超卖、最终一致性、可回滚、可观测**的分布式秒杀能力。
+高并发分布式秒杀交易系统：面向瞬时高并发请求，提供**防超卖、最终一致性、可回滚、可观测**的交易能力。
 
 > 版本：`0.1.0-RC1`（分支 `release/RC1`）
 > 定位：个人简历项目——完整实践高并发交易系统的架构、工程与发布验证体系。
@@ -36,6 +36,7 @@
 execute ─▶ Gateway(鉴权/限流/Canary) ─▶ seckill(Redis Lua 原子扣减+防重)
         ─▶ RocketMQ 事务消息 ─▶ order(建单 WAIT_PAY) ─▶ inventory(DEDUCT 分桶+流水)
         ─▶ payment(创建支付/回调验签) ─▶ PAY_SUCCESS ─▶ order(PAY_SUCCESS)
+        ─▶ refund(渠道退款) ─▶ REFUND_SUCCESS ─▶ order(REFUND)
         ─▶ 取消/超时 ─▶ RECOVER 回补（幂等）
 ```
 
@@ -48,6 +49,8 @@ execute ─▶ Gateway(鉴权/限流/Canary) ─▶ seckill(Redis Lua 原子扣�
 - `available_stock + locked_stock == total_stock` 作为库存不变量；
 - Redis 丢失可按 MySQL `available_stock` 预热恢复，故障可 repair（REPAIR 流水留痕）；
 - payment 回调完成验签、时间窗和金额校验后发布 `PAY_SUCCESS`，order-service 以 `paymentNo` 幂等消费并写入 `paid_at`。
+- payment 退款成功后仅在本地事务提交后发布 `REFUND_SUCCESS`，通知状态以 `PENDING/SENT` 持久化，失败由补偿任务重试；
+- order-service 按 `refundNo` 幂等消费 `REFUND_SUCCESS`，只允许 `PAY_SUCCESS → REFUND`，非法或乱序事件交由 MQ 重试。
 
 ---
 
@@ -81,6 +84,7 @@ execute ─▶ Gateway(鉴权/限流/Canary) ─▶ seckill(Redis Lua 原子扣�
 | E2E 10000    | 历史 L-07 实跑 PASS（零超卖 / 零死锁 / 幂等 / 恢复） |
 | Canary 窗口  | 113 万请求 / 5% 分流 4.97% / error=0                |
 | 回滚 RTO     | Gateway 100→0 < 5min（实测毫秒级）                  |
+| 退款闭环     | `REFUND_SUCCESS → order REFUND`，通知可补偿、消费幂等     |
 | 提交数       | 220+ commits（单一职责、可审计）                    |
 
 > 以上容量数字来自隔离拓扑或本机 Testcontainers 压测，不能直接等价为生产容量。
@@ -157,9 +161,10 @@ mvn -pl integration-test -am test -Dtest=ProductionScaleValidationTest \
 | --------------------- | ----------- | ------------------------------------------------- |
 | Inventory Consistency | ✅ PASS     | 零超卖、Redis==MySQL、不变量                      |
 | Monitoring / Rollback | ✅ PASS     | Prometheus + RTO<5min                             |
+| Refund Event Closure  | ✅ PASS     | `REFUND_SUCCESS` 提交后发布 + `refundNo` 幂等消费 |
 | Dependency Scan       | ⏳ PENDING  | 需远程 GitHub Actions 实际证据                    |
 | E2E 50000             | ❌ NOT PASS | 需独立 Load Generator + 生产 MQ（个人环境未具备） |
-| MQ Stability          | ⏳ PENDING  | 需生产规格 RocketMQ                               |
+| MQ Stability          | ⏳ PENDING  | 已提供双 NameServer + SYNC_MASTER/SLAVE 拓扑，仍需独立环境验证 |
 | Production Canary     | ⏳ PENDING  | 需生产数据中心流量窗口                            |
 | Operations Sign-off   | ⏳ PENDING  | 需运营 Owner 签署                                 |
 
@@ -172,11 +177,13 @@ mvn -pl integration-test -am test -Dtest=ProductionScaleValidationTest \
 
 ## 七、已知限制
 
-- `REFUND_SUCCESS` 到 order-service `REFUND` 的事件闭环尚未接入，退款仍是后续工作；
+- 退款事件闭环已接入：payment 事务提交后发送 `REFUND_SUCCESS`，数据库 `PENDING/SENT` 状态支持失败补偿，order-service 按 `refundNo` 幂等更新 `REFUND`；
 - Docker 演示环境已开启 Redis AOF `everysec`，但 Redis 仍不是库存最终事实源；全量丢失仍必须按 MySQL `available_stock` 预热、对账后放量；
 - recover 契约无 userId（登记项）；
 - 混沌全量同 JVM 连续执行存在 MQ 收敛级联伪影（生产演练按类隔离执行）；
-- 演示部署使用 root 账号与演示密钥，生产必须替换。
+- 内部接口 nonce 已改为 Redis `SET NX EX`，Redis 不可用时 fail-closed；生产 Redis 仍需高可用部署；
+- `docker/docker-compose.production.yml` 提供双 NameServer + RocketMQ SYNC_MASTER/SLAVE，但同一 Docker 主机不构成跨故障域容灾，生产仍需分散到独立节点；
+- 演示部署使用 root 账号与演示密钥；生产启动必须先由外部密钥管理系统注入变量并通过 `scripts/validate-production-env.*` 校验。
 
 ---
 

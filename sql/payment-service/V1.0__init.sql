@@ -55,10 +55,12 @@ CREATE TABLE IF NOT EXISTS `payment_refund` (
     `amount`             DECIMAL(18,2) NOT NULL COMMENT '退款金额',
     `status`             VARCHAR(20)   NOT NULL DEFAULT 'REFUNDING' COMMENT 'REFUNDING/REFUND_SUCCESS/REFUND_FAILED',
     `channel_refund_no`  VARCHAR(64)   DEFAULT NULL COMMENT '渠道退款号',
+    `order_notify_status` VARCHAR(20)  NOT NULL DEFAULT 'PENDING' COMMENT 'REFUND_SUCCESS 订单通知状态：PENDING/SENT',
     `version`            INT           NOT NULL DEFAULT 0 COMMENT '乐观锁版本',
     `created_time`       DATETIME(3)   NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updated_time`       DATETIME(3)   NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_refund_no` (`refund_no`),
-    KEY `idx_payment_no` (`payment_no`)
+    KEY `idx_payment_no` (`payment_no`),
+    KEY `idx_order_notify` (`status`, `order_notify_status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='退款单表';

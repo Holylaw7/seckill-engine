@@ -15,6 +15,7 @@
 | [observability-hardening.md](./observability-hardening.md) | 可观测性指标冻结 |
 | [slow-sql-baseline.md](./slow-sql-baseline.md) | 慢 SQL 基线 |
 | [production-config-baseline.md](./production-config-baseline.md) | 生产配置基线 |
+| [phase6.24-resilience-closure.md](./phase6.24-resilience-closure.md) | RocketMQ HA、退款事件、Redis 防重放、密钥注入风险收敛 |
 | [ga-final-checklist.md](./ga-final-checklist.md) | GA 最终核对清单 |
 
 ## 二、性能与容量证据（docs/05-性能优化）

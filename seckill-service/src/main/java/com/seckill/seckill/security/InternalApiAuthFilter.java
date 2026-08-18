@@ -10,13 +10,14 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.time.Duration;
 
 /**
  * 内部接口 Service ACL（Phase 6.6）：
@@ -26,6 +27,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class InternalApiAuthFilter extends OncePerRequestFilter {
 
     private static final String NAME_HEADER = "X-Service-Name";
@@ -33,11 +35,11 @@ public class InternalApiAuthFilter extends OncePerRequestFilter {
     private static final String NONCE_HEADER = "X-Service-Nonce";
     private static final String SIGNATURE_HEADER = "X-Service-Signature";
     private static final long NONCE_TTL_MILLIS = 60_000L;
-    private static final int MAX_NONCES = 10000;
+    private static final String NONCE_KEY_PREFIX = "seckill:security:nonce:";
 
     private final InternalAuthProperties properties;
     private final ObjectMapper objectMapper;
-    private final Map<String, Long> nonces = new ConcurrentHashMap<>();
+    private final StringRedisTemplate redisTemplate;
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
@@ -78,13 +80,10 @@ public class InternalApiAuthFilter extends OncePerRequestFilter {
             writeError(response, HttpServletResponse.SC_FORBIDDEN, ErrorCode.FORBIDDEN);
             return;
         }
-        String nonceKey = name + ":" + nonce;
-        Long previous = nonces.putIfAbsent(nonceKey, System.currentTimeMillis());
-        if (previous != null) {
+        if (!tryAcquireNonce(name, nonce)) {
             writeError(response, HttpServletResponse.SC_UNAUTHORIZED, ErrorCode.UNAUTHORIZED);
             return;
         }
-        trimNonces();
 
         String path = request.getRequestURI();
         boolean allowed = path.contains("/pre-deducts/confirm") && "order-service".equals(name)
@@ -96,12 +95,18 @@ public class InternalApiAuthFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    private void trimNonces() {
-        if (nonces.size() < MAX_NONCES) {
-            return;
+    private boolean tryAcquireNonce(String serviceName, String nonce) {
+        String key = NONCE_KEY_PREFIX + serviceName + ":" + nonce;
+        try {
+            Boolean acquired = redisTemplate.opsForValue()
+                    .setIfAbsent(key, "1", Duration.ofMillis(NONCE_TTL_MILLIS));
+            return Boolean.TRUE.equals(acquired);
+        } catch (RuntimeException e) {
+            // 防重放组件不可用时拒绝请求，不能退化为单实例内存防重放。
+            log.error("internal nonce store unavailable, serviceName={}, error={}",
+                    serviceName, e.getMessage());
+            return false;
         }
-        long now = System.currentTimeMillis();
-        nonces.entrySet().removeIf(entry -> now - entry.getValue() > NONCE_TTL_MILLIS);
     }
 
     private void writeError(HttpServletResponse response, int status, ErrorCode errorCode)

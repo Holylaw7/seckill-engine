@@ -29,6 +29,8 @@ public class PaymentRefund {
 
     private String channelRefundNo;
 
+    private String orderNotifyStatus;
+
     private Integer version;
 
     private LocalDateTime createdTime;

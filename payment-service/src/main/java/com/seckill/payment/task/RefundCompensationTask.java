@@ -32,5 +32,15 @@ public class RefundCompensationTask {
                 log.warn("refund retry failed, refundNo={}, error={}", refund.getRefundNo(), e.getMessage());
             }
         }
+        List<PaymentRefund> pendingNotifications = refundService.findPendingRefundNotifications(
+                properties.getRefundCompensate().getBatchSize());
+        for (PaymentRefund refund : pendingNotifications) {
+            try {
+                refundService.retryRefundSuccessNotification(refund.getRefundNo());
+            } catch (Exception e) {
+                log.warn("refund success notification retry failed, refundNo={}, error={}",
+                        refund.getRefundNo(), e.getMessage());
+            }
+        }
     }
 }
